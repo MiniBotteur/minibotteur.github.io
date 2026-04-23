@@ -4,32 +4,50 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// ===== SPRITES =====
+// =====================
+// 🛡️ SAFE IMAGE LOADER
+// =====================
 function loadImg(src) {
   const img = new Image();
+  img.loaded = false;
+
+  img.onload = () => {
+    img.loaded = true;
+  };
+
+  img.onerror = () => {
+    console.error("❌ Image introuvable :", src);
+  };
+
   img.src = src;
   return img;
 }
 
+// =====================
+// 🖼️ SPRITES
+// =====================
 const sprites = {
   stand: loadImg("persos/debout.png"),
   crouch: loadImg("persos/par_terre.png")
 };
 
-// ===== GAME =====
+// =====================
+// 🎮 GAME STATE
+// =====================
 const game = {
   running: true,
   speed: 6,
-  baseSpeed: 6,
   maxSpeed: 18,
-  speedIncrease: 0.0012,
+  speedIncrease: 0.001,
   score: 0,
   obstacles: [],
   spawnTimer: 0,
   spawnRate: 1400
 };
 
-// ===== PLAYER =====
+// =====================
+// 🧍 PLAYER
+// =====================
 const player = {
   x: 80,
   y: 0,
@@ -45,12 +63,16 @@ const player = {
 const groundY = () => canvas.height - player.h - 40;
 player.y = groundY();
 
-// ===== INPUT =====
+// =====================
+// INPUT
+// =====================
 const keys = {};
 document.addEventListener("keydown", e => keys[e.code] = true);
 document.addEventListener("keyup", e => keys[e.code] = false);
 
-// ===== OBSTACLES =====
+// =====================
+// OBSTACLES
+// =====================
 class Obstacle {
   constructor(type) {
     this.type = type;
@@ -77,20 +99,24 @@ class Obstacle {
   }
 }
 
-// ===== COLLISION =====
+// =====================
+// COLLISION SAFE
+// =====================
 function collide(a, b) {
   return (
-    a.x + a.w * 0.2 < b.x + b.w &&
-    a.x + a.w * 0.8 > b.x &&
-    a.y + a.h * 0.2 < b.y + b.h &&
-    a.y + a.h * 0.9 > b.y
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
   );
 }
 
-// ===== RESET =====
+// =====================
+// RESET
+// =====================
 function resetGame() {
   game.running = true;
-  game.speed = game.baseSpeed;
+  game.speed = 6;
   game.score = 0;
   game.obstacles = [];
   game.spawnTimer = 0;
@@ -100,7 +126,9 @@ function resetGame() {
   player.jumping = false;
 }
 
-// ===== GAME OVER =====
+// =====================
+// GAME OVER
+// =====================
 function drawGameOver() {
   ctx.fillStyle = "rgba(0,0,0,0.6)";
   ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -114,7 +142,9 @@ function drawGameOver() {
   ctx.fillText("ESPACE pour recommencer", canvas.width/2, canvas.height/2+40);
 }
 
-// ===== LOOP =====
+// =====================
+// LOOP
+// =====================
 let lastTime = 0;
 
 function update(time = 0) {
@@ -132,7 +162,7 @@ function update(time = 0) {
     return;
   }
 
-  // SCORE + SPEED
+  // SCORE
   game.score += game.speed * 0.02 * dt;
 
   if (game.speed < game.maxSpeed) {
@@ -186,8 +216,10 @@ function update(time = 0) {
     if (o.x + o.w < 0) game.obstacles.splice(i,1);
   });
 
-  // PLAYER
-  ctx.drawImage(sprite, player.x, player.y, player.w, h);
+  // PLAYER SAFE DRAW
+  if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+    ctx.drawImage(sprite, player.x, player.y, player.w, h);
+  }
 
   // SCORE UI
   ctx.fillStyle = "rgba(0,0,0,0.4)";
