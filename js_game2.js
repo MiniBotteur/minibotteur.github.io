@@ -1,199 +1,262 @@
-// Canvas setup
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Chargement des sprites
-const playerImgStand = new Image();
-playerImgStand.src = "persos/debout.png";
+// =====================
+// 🖼️ SPRITES
+// =====================
+function loadImg(src) {
+  const img = new Image();
+  img.src = src;
+  return img;
+}
 
-const playerImgCrouch = new Image();
-playerImgCrouch.src = "persos/par_terre.png";
+const sprites = {
+  stand: loadImg("persos/debout.png"),
+  crouch: loadImg("persos/par_terre.png")
+};
 
-// Joueur (+15%)
+// =====================
+// 🎮 GAME STATE
+// =====================
+const game = {
+  running: true,
+  speed: 6,
+  baseSpeed: 6,
+  maxSpeed: 18,
+  speedIncrease: 0.0012,
+  score: 0,
+  obstacles: [],
+  spawnTimer: 0,
+  spawnRate: 1400
+};
+
+// =====================
+// 🧍 PLAYER (sprites)
+// =====================
 const player = {
-    x: 100,
-    y: canvas.height - 150,
-    width: 150,
-    height: 150,
-    vy: 0,
-    gravity: 1,
-    jumpForce: -28, // saut corrigé
-    isJumping: false,
-    isCrouching: false
+  x: 80,
+  y: 0,
+  w: 90,
+  h: 110,
+  vy: 0,
+  gravity: 1.5,
+  jumpForce: -22,
+  jumping: false,
+  crouching: false
 };
 
-let score = 0;
-let gameOver = false;
+const groundY = () => canvas.height - player.h - 40;
+player.y = groundY();
 
-// Vitesse progressive
-let speed = 3;
-let speedIncrease = 0.0005;
+// =====================
+// ⌨ INPUT
+// =====================
+const keys = {};
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
 
-// Obstacles (-5% + ajustements)
-const obstacleBas = {
-    x: canvas.width,
-    y: canvas.height - 50, // plus bas
-    width: 60,
-    height: 60 // plus petit pour passer
-};
+// =====================
+// 🧱 OBSTACLES
+// =====================
+class Obstacle {
+  constructor(type) {
+    this.type = type;
 
-const obstacleHaut = {
-    x: canvas.width + 600,
-    y: canvas.height - 150,
-    width: 76,
-    height: 38
-};
-
-let prochainObstacle = "bas";
-
-// Saut
-function jump() {
-    if (!player.isJumping && !player.isCrouching) {
-        player.vy = player.jumpForce;
-        player.isJumping = true;
-    }
-}
-
-// Game Over
-function showGameOverMessage() {
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.fillStyle = "white";
-    ctx.font = "70px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
-
-    ctx.font = "40px Arial";
-    ctx.fillText("Distance : " + Math.floor(score), canvas.width / 2, canvas.height / 2 + 20);
-
-    ctx.font = "25px Arial";
-    ctx.fillText("Appuie sur ESPACE pour recommencer", canvas.width / 2, canvas.height / 2 + 80);
-}
-
-// Accroupissement
-function crouch(active) {
-    if (player.isJumping) return;
-
-    if (active) {
-        player.isCrouching = true;
-        player.height = 65;
+    if (type === "small") {
+      this.w = 40;
+      this.h = 70;
+      this.y = canvas.height - this.h - 40;
     } else {
-        player.isCrouching = false;
-        player.height = 150;
+      this.w = 70;
+      this.h = 110;
+      this.y = canvas.height - this.h - 40;
     }
+
+    this.x = canvas.width + 20;
+  }
+
+  update(speed) {
+    this.x -= speed;
+  }
+
+  draw() {
+    ctx.fillStyle = this.type === "small" ? "red" : "orange";
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+  }
 }
 
-// Boucle du jeu
-function update() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+// =====================
+// 💥 COLLISION (propre & jouable)
+// =====================
+function collide(a, b) {
+  return (
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+  );
+}
 
-    ctx.fillStyle = "#222";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+// =====================
+// 🔄 RESET
+// =====================
+function resetGame() {
+  game.running = true;
+  game.speed = game.baseSpeed;
+  game.score = 0;
+  game.obstacles = [];
+  game.spawnTimer = 0;
 
-    if (gameOver) {
-        showGameOverMessage();
-        return;
-    }
+  player.y = groundY();
+  player.vy = 0;
+  player.jumping = false;
+}
 
-    // Vitesse progressive
-    speed += speedIncrease;
+// =====================
+// 💀 GAME OVER
+// =====================
+function drawGameOver() {
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Score = distance
-    score += speed * 0.1;
+  ctx.fillStyle = "white";
+  ctx.font = "50px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
 
-    // Gravité
-    player.vy += player.gravity;
-    player.y += player.vy;
+  ctx.font = "20px Arial";
+  ctx.fillText(
+    "Appuie sur ESPACE pour recommencer",
+    canvas.width / 2,
+    canvas.height / 2 + 40
+  );
+}
 
-    // Sol
-    if (player.y >= canvas.height - player.height - 50) {
-        player.y = canvas.height - player.height - 50;
-        player.vy = 0;
-        player.isJumping = false;
-    }
+// =====================
+// 🧠 LOOP
+// =====================
+let lastTime = 0;
 
-    // Déplacement obstacles
-    if (prochainObstacle === "bas") {
-        obstacleBas.x -= speed;
-        if (obstacleBas.x + obstacleBas.width < 0) {
-            obstacleBas.x = canvas.width + Math.random() * 400;
-            prochainObstacle = "haut";
-        }
-    }
+function update(time = 0) {
+  const dt = time - lastTime;
+  lastTime = time;
 
-    if (prochainObstacle === "haut") {
-        obstacleHaut.x -= speed;
-        if (obstacleHaut.x + obstacleHaut.width < 0) {
-            obstacleHaut.x = canvas.width + Math.random() * 400;
-            prochainObstacle = "bas";
-        }
-    }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Collision avec hitbox réduite (90%)
-    function collide(a, b) {
-        const hitA = {
-            x: a.x + a.width * 0.05,
-            y: a.y + a.height * 0.05,
-            width: a.width * 0.9,
-            height: a.height * 0.9
-        };
+  // sol
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
 
-        return (
-            hitA.x < b.x + b.width &&
-            hitA.x + hitA.width > b.x &&
-            hitA.y < b.y + b.height &&
-            hitA.y + hitA.height > b.y
-        );
-    }
-
-    if (
-        (prochainObstacle === "bas" && collide(player, obstacleBas)) ||
-        (prochainObstacle === "haut" && collide(player, obstacleHaut))
-    ) {
-        gameOver = true;
-    }
-
-    // Dessin joueur
-    const sprite = player.isCrouching ? playerImgCrouch : playerImgStand;
-    ctx.drawImage(sprite, player.x, player.y, player.width, player.height);
-
-    // Dessin obstacles
-    if (prochainObstacle === "bas") {
-        ctx.fillStyle = "red";
-        ctx.fillRect(obstacleBas.x, obstacleBas.y, obstacleBas.width, obstacleBas.height);
-    }
-
-    if (prochainObstacle === "haut") {
-        ctx.fillStyle = "orange";
-        ctx.fillRect(obstacleHaut.x, obstacleHaut.y, obstacleHaut.width, obstacleHaut.height);
-    }
-
-    // Score en haut à droite
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
-    ctx.fillRect(canvas.width - 220, 20, 200, 50);
-
-    ctx.fillStyle = "white";
-    ctx.font = "30px Arial";
-    ctx.textAlign = "right";
-    ctx.fillText("Distance : " + Math.floor(score), canvas.width - 30, 55);
-
+  if (!game.running) {
+    drawGameOver();
     requestAnimationFrame(update);
+    return;
+  }
+
+  // =====================
+  // 📈 SCORE + SPEED
+  // =====================
+  game.score += game.speed * 0.02 * dt;
+
+  if (game.speed < game.maxSpeed) {
+    game.speed += game.speedIncrease * dt;
+  }
+
+  // =====================
+  // 🦖 PHYSICS
+  // =====================
+  player.vy += player.gravity;
+  player.y += player.vy;
+
+  const ground = groundY();
+  if (player.y > ground) {
+    player.y = ground;
+    player.vy = 0;
+    player.jumping = false;
+  }
+
+  // =====================
+  // 🎮 INPUT
+  // =====================
+  if ((keys["Space"] || keys["ArrowUp"]) && !player.jumping) {
+    player.vy = player.jumpForce;
+    player.jumping = true;
+  }
+
+  player.crouching = keys["ArrowDown"] && !player.jumping;
+
+  const currentH = player.crouching ? 70 : player.h;
+  const sprite = player.crouching ? sprites.crouch : sprites.stand;
+
+  // =====================
+  // 🧱 SPAWN OBSTACLES
+  // =====================
+  game.spawnTimer += dt;
+
+  if (game.spawnTimer > game.spawnRate) {
+    const type = Math.random() > 0.5 ? "small" : "big";
+    game.obstacles.push(new Obstacle(type));
+    game.spawnTimer = 0;
+  }
+
+  // =====================
+  // 🧱 UPDATE OBSTACLES
+  // =====================
+  game.obstacles.forEach((o, i) => {
+    o.update(game.speed);
+    o.draw();
+
+    const p = {
+      x: player.x + 5,
+      y: player.y + 5,
+      w: player.w - 10,
+      h: currentH - 5
+    };
+
+    if (collide(p, o)) game.running = false;
+
+    if (o.x + o.w < 0) game.obstacles.splice(i, 1);
+  });
+
+  // =====================
+  // 🧍 PLAYER DRAW (SPRITE)
+  // =====================
+  ctx.drawImage(
+    sprite,
+    player.x,
+    player.y,
+    player.w,
+    currentH
+  );
+
+  // =====================
+  // 📊 SCORE UI
+  // =====================
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.fillRect(canvas.width - 220, 20, 200, 50);
+
+  ctx.fillStyle = "white";
+  ctx.font = "26px Arial";
+  ctx.textAlign = "right";
+  ctx.fillText(
+    `Score: ${Math.floor(game.score)}`,
+    canvas.width - 30,
+    55
+  );
+
+  requestAnimationFrame(update);
 }
+
+// =====================
+// 🔁 RESTART
+// =====================
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" && !game.running) {
+    resetGame();
+  }
+});
 
 update();
-
-// Contrôles
-document.addEventListener("keydown", (e) => {
-    if (e.code === "ArrowUp" || e.code === "Space") jump();
-    if (e.code === "ArrowDown") crouch(true);
-
-    if (gameOver && e.code === "Space") location.reload();
-});
-
-document.addEventListener("keyup", (e) => {
-    if (e.code === "ArrowDown") crouch(false);
-});
