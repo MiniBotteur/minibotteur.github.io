@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Jeu 2</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #111;
+            font-family: Arial, sans-serif;
+        }
+
+        #backBtn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        #backBtn:hover {
+            background: #ddd;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<button id="backBtn" onclick="location.href='index.html'">⬅ Retour au menu</button>
+
+<!-- Canvas du jeu -->
+<canvas id="gameCanvas"></canvas>
+
+<!-- Script du jeu -->
+<script src="js_game2.js"></script>
+
+</body>
+</html>
