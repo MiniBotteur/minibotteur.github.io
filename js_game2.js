@@ -5,21 +5,30 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 // =====================
-// IMAGES
+// IMAGE LOADER SAFE
 // =====================
 function loadImage(src) {
-  const img = new Image();
-  img.src = src;
-  return img;
+  return new Promise((resolve) => {
+    const img = new Image();
+
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      console.error("❌ Image failed to load:", src);
+      resolve(null);
+    };
+
+    img.src = src;
+  });
 }
 
+// =====================
+// ASSETS (vides au début)
+// =====================
 const assets = {
-  stand: loadImage("persos/debout.png"),
-  crouch: loadImage("persos/par_terre.png"),
-
-  // 🔥 2 cailloux
-  rock1: loadImage("persos/caillou.png"),
-  rock2: loadImage("persos/caillou2.png")
+  stand: null,
+  crouch: null,
+  rock1: null,
+  rock2: null
 };
 
 // =====================
@@ -58,12 +67,10 @@ const player = {
 // INPUT
 // =====================
 const keys = {};
+
 document.addEventListener("keydown", (e) => {
   keys[e.code] = true;
-
-  if (!game.running && e.code === "Space") {
-    resetGame();
-  }
+  if (!game.running && e.code === "Space") resetGame();
 });
 
 document.addEventListener("keyup", (e) => {
@@ -83,7 +90,6 @@ class Obstacle {
       this.h = 75;
       this.y = ground() - this.h;
 
-      // 🔥 RANDOM CAILLLOU
       this.variant = Math.random() < 0.5 ? "rock1" : "rock2";
     }
 
@@ -100,19 +106,18 @@ class Obstacle {
 
   draw() {
     if (this.type === "ground") {
-
       const img =
         this.variant === "rock1"
           ? assets.rock1
           : assets.rock2;
 
-      if (img && img.complete && img.naturalWidth > 0) {
+      if (img) {
         ctx.drawImage(img, this.x, this.y, this.w, this.h);
       } else {
-        ctx.fillStyle = "red";
+        // fallback visible (important debug)
+        ctx.fillStyle = "purple";
         ctx.fillRect(this.x, this.y, this.w, this.h);
       }
-
     } else {
       ctx.fillStyle = "orange";
       ctx.fillRect(this.x, this.y, this.w, this.h);
@@ -159,7 +164,6 @@ function update(time = 0) {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // sol
   ctx.fillStyle = "#111";
   ctx.fillRect(0, ground(), canvas.width, 40);
 
@@ -183,15 +187,13 @@ function update(time = 0) {
       canvas.height / 2 + 80
     );
 
-    return requestAnimationFrame(update);
+    requestAnimationFrame(update);
+    return;
   }
 
-  // SCORE + SPEED
+  // SPEED + SCORE
   game.score += game.speed * 0.02 * dt;
-
-  if (game.speed < game.maxSpeed) {
-    game.speed += game.speedIncrease * dt;
-  }
+  game.speed = Math.min(game.speed + game.speedIncrease * dt, game.maxSpeed);
 
   // PHYSICS
   player.vy += player.gravity;
@@ -216,9 +218,7 @@ function update(time = 0) {
 
   player.crouching = crouch && !player.jumping;
 
-  const crouchHeight = 70;
-  const h = player.crouching ? crouchHeight : player.h;
-
+  const h = player.crouching ? 70 : player.h;
   const sprite = player.crouching ? assets.crouch : assets.stand;
 
   if (!player.jumping) {
@@ -239,12 +239,7 @@ function update(time = 0) {
     o.update(game.speed);
     o.draw();
 
-    const p = {
-      x: player.x,
-      y: player.y,
-      w: player.w,
-      h: h
-    };
+    const p = { x: player.x, y: player.y, w: player.w, h };
 
     if (collide(p, o)) {
       game.running = false;
@@ -255,17 +250,14 @@ function update(time = 0) {
   });
 
   // PLAYER
-  if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+  if (sprite) {
     ctx.drawImage(sprite, player.x, player.y, player.w, h);
   } else {
     ctx.fillStyle = "lime";
     ctx.fillRect(player.x, player.y, player.w, h);
   }
 
-  // SCORE UI
-  ctx.fillStyle = "rgba(0,0,0,0.4)";
-  ctx.fillRect(canvas.width - 220, 20, 200, 50);
-
+  // SCORE
   ctx.fillStyle = "white";
   ctx.font = "26px Arial";
   ctx.textAlign = "right";
@@ -274,5 +266,27 @@ function update(time = 0) {
   requestAnimationFrame(update);
 }
 
-// START
-update();
+// =====================
+// INIT (IMPORTANT)
+// =====================
+async function init() {
+  const [stand, crouch, rock1, rock2] = await Promise.all([
+    loadImage("persos/debout.png"),
+    loadImage("persos/par_terre.png"),
+    loadImage("persos/caillou.png"),
+    loadImage("persos/caillou2.png")
+  ]);
+
+  assets.stand = stand;
+  assets.crouch = crouch;
+  assets.rock1 = rock1;
+  assets.rock2 = rock2;
+
+  console.log("Assets loaded:", assets);
+
+  player.y = ground() - player.h;
+
+  update();
+}
+
+init();
