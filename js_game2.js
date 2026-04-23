@@ -13,7 +13,7 @@ function loadImage(src) {
 
     img.onload = () => resolve(img);
     img.onerror = () => {
-      console.error("❌ Image failed to load:", src);
+      console.error("❌ Image failed:", src);
       resolve(null);
     };
 
@@ -22,13 +22,15 @@ function loadImage(src) {
 }
 
 // =====================
-// ASSETS (vides au début)
+// ASSETS
 // =====================
 const assets = {
   stand: null,
   crouch: null,
   rock1: null,
-  rock2: null
+  rock2: null,
+  airplane: null,
+  background: null
 };
 
 // =====================
@@ -49,13 +51,18 @@ const game = {
 const ground = () => canvas.height - 40;
 
 // =====================
+// BACKGROUND POSITION
+// =====================
+let bgX = 0;
+
+// =====================
 // PLAYER
 // =====================
 const player = {
   x: 80,
   y: 0,
-  w: 90,
-  h: 110,
+  w: 120,
+  h: 170,
   vy: 0,
   gravity: 1.05,
   jumpForce: -27,
@@ -89,14 +96,13 @@ class Obstacle {
       this.w = 100;
       this.h = 75;
       this.y = ground() - this.h;
-
       this.variant = Math.random() < 0.5 ? "rock1" : "rock2";
     }
 
-    if (type === "head") {
-      this.w = 70;
-      this.h = 40;
-      this.y = ground() - player.h - 20;
+    if (type === "air") {
+      this.w = 130;
+      this.h = 70;
+      this.y = ground() - player.h - 60;
     }
   }
 
@@ -114,13 +120,24 @@ class Obstacle {
       if (img) {
         ctx.drawImage(img, this.x, this.y, this.w, this.h);
       } else {
-        // fallback visible (important debug)
         ctx.fillStyle = "purple";
         ctx.fillRect(this.x, this.y, this.w, this.h);
       }
-    } else {
-      ctx.fillStyle = "orange";
-      ctx.fillRect(this.x, this.y, this.w, this.h);
+    }
+
+    if (this.type === "air") {
+      if (assets.airplane) {
+        ctx.drawImage(
+          assets.airplane,
+          this.x,
+          this.y,
+          this.w,
+          this.h
+        );
+      } else {
+        ctx.fillStyle = "skyblue";
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+      }
     }
   }
 }
@@ -164,9 +181,30 @@ function update(time = 0) {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = "#111";
-  ctx.fillRect(0, ground(), canvas.width, 40);
+  // =====================
+  // BACKGROUND (SYNC + TRANSPARENCE)
+  // =====================
+  if (assets.background) {
+    bgX -= game.speed; // 🔥 même vitesse que obstacles
 
+    if (bgX <= -canvas.width) {
+      bgX = 0;
+    }
+
+    ctx.globalAlpha = 0.6; // 🔥 transparence fond
+
+    ctx.drawImage(assets.background, bgX, 0, canvas.width, canvas.height);
+    ctx.drawImage(assets.background, bgX + canvas.width, 0, canvas.width, canvas.height);
+
+    ctx.globalAlpha = 1; // reset
+  } else {
+    ctx.fillStyle = "#87CEEB";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // =====================
+  // GAME OVER
+  // =====================
   if (!game.running) {
     ctx.fillStyle = "white";
     ctx.textAlign = "center";
@@ -191,11 +229,15 @@ function update(time = 0) {
     return;
   }
 
+  // =====================
   // SPEED + SCORE
+  // =====================
   game.score += game.speed * 0.02 * dt;
   game.speed = Math.min(game.speed + game.speedIncrease * dt, game.maxSpeed);
 
+  // =====================
   // PHYSICS
+  // =====================
   player.vy += player.gravity;
   player.y += player.vy;
 
@@ -207,7 +249,9 @@ function update(time = 0) {
     player.jumping = false;
   }
 
+  // =====================
   // INPUT
+  // =====================
   const jump = keys["Space"] || keys["ArrowUp"];
   const crouch = keys["ArrowDown"];
 
@@ -218,23 +262,27 @@ function update(time = 0) {
 
   player.crouching = crouch && !player.jumping;
 
-  const h = player.crouching ? 70 : player.h;
+  const h = player.crouching ? 95 : player.h;
   const sprite = player.crouching ? assets.crouch : assets.stand;
 
   if (!player.jumping) {
     player.y = ground() - h;
   }
 
+  // =====================
   // SPAWN
+  // =====================
   game.spawnTimer += dt;
 
   if (game.spawnTimer > game.spawnRate) {
-    const type = Math.random() > 0.5 ? "ground" : "head";
+    const type = Math.random() > 0.5 ? "ground" : "air";
     game.obstacles.push(new Obstacle(type));
     game.spawnTimer = 0;
   }
 
+  // =====================
   // OBSTACLES
+  // =====================
   game.obstacles.forEach((o, i) => {
     o.update(game.speed);
     o.draw();
@@ -249,7 +297,9 @@ function update(time = 0) {
     if (o.x + o.w < 0) game.obstacles.splice(i, 1);
   });
 
+  // =====================
   // PLAYER
+  // =====================
   if (sprite) {
     ctx.drawImage(sprite, player.x, player.y, player.w, h);
   } else {
@@ -257,7 +307,9 @@ function update(time = 0) {
     ctx.fillRect(player.x, player.y, player.w, h);
   }
 
+  // =====================
   // SCORE
+  // =====================
   ctx.fillStyle = "white";
   ctx.font = "26px Arial";
   ctx.textAlign = "right";
@@ -267,22 +319,25 @@ function update(time = 0) {
 }
 
 // =====================
-// INIT (IMPORTANT)
+// INIT
 // =====================
 async function init() {
-  const [stand, crouch, rock1, rock2] = await Promise.all([
-    loadImage("persos/debout.png"),
-    loadImage("persos/par_terre.png"),
-    loadImage("persos/caillou.png"),
-    loadImage("persos/caillou2.png")
-  ]);
+  const [stand, crouch, rock1, rock2, airplane, background] =
+    await Promise.all([
+      loadImage("persos/debout.png"),
+      loadImage("persos/par_terre.png"),
+      loadImage("persos/caillou.png"),
+      loadImage("persos/caillou2.png"),
+      loadImage("persos/avion.png"),
+      loadImage("persos/fond.png")
+    ]);
 
   assets.stand = stand;
   assets.crouch = crouch;
   assets.rock1 = rock1;
   assets.rock2 = rock2;
-
-  console.log("Assets loaded:", assets);
+  assets.airplane = airplane;
+  assets.background = background;
 
   player.y = ground() - player.h;
 
