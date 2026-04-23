@@ -5,7 +5,7 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 // =====================
-// 🛡️ SAFE IMAGE LOADER
+// 🛡️ IMAGE SAFE LOAD
 // =====================
 function loadImg(src) {
   const img = new Image();
@@ -27,12 +27,12 @@ function loadImg(src) {
 // 🖼️ SPRITES
 // =====================
 const sprites = {
-  stand: loadImg("persos/debout.png"),
-  crouch: loadImg("persos/par_terre.png")
+  stand: loadImg("./persos/debout.png"),
+  crouch: loadImg("./persos/par_terre.png")
 };
 
 // =====================
-// 🎮 GAME STATE
+// 🎮 GAME
 // =====================
 const game = {
   running: true,
@@ -100,7 +100,7 @@ class Obstacle {
 }
 
 // =====================
-// COLLISION SAFE
+// COLLISION
 // =====================
 function collide(a, b) {
   return (
@@ -219,6 +219,9 @@ function update(time = 0) {
   // PLAYER SAFE DRAW
   if (sprite && sprite.complete && sprite.naturalWidth > 0) {
     ctx.drawImage(sprite, player.x, player.y, player.w, h);
+  } else {
+    ctx.fillStyle = "lime";
+    ctx.fillRect(player.x, player.y, player.w, h);
   }
 
   // SCORE UI
