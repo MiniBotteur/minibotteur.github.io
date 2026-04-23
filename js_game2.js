@@ -5,22 +5,25 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 // =====================
-// IMAGES
+// IMAGE LOADER ROBUSTE
 // =====================
 function loadImage(src) {
-  const img = new Image();
-  img.src = src;
-  return img;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = src;
+
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      console.error("Image failed:", src);
+      resolve(null); // évite crash
+    };
+  });
 }
 
-const assets = {
-  stand: loadImage("persos/debout.png"),
-  crouch: loadImage("persos/par_terre.png"),
-
-  // 🔥 2 cailloux
-  rock1: loadImage("persos/caillou.png"),
-  rock2: loadImage("persos/caillou2.png")
-};
+// =====================
+// ASSETS
+// =====================
+const assets = {};
 
 // =====================
 // GAME STATE
@@ -58,6 +61,7 @@ const player = {
 // INPUT
 // =====================
 const keys = {};
+
 document.addEventListener("keydown", (e) => {
   keys[e.code] = true;
 
@@ -83,7 +87,6 @@ class Obstacle {
       this.h = 75;
       this.y = ground() - this.h;
 
-      // 🔥 RANDOM CAILLLOU
       this.variant = Math.random() < 0.5 ? "rock1" : "rock2";
     }
 
@@ -100,19 +103,17 @@ class Obstacle {
 
   draw() {
     if (this.type === "ground") {
-
       const img =
         this.variant === "rock1"
           ? assets.rock1
           : assets.rock2;
 
-      if (img && img.complete && img.naturalWidth > 0) {
+      if (img) {
         ctx.drawImage(img, this.x, this.y, this.w, this.h);
       } else {
         ctx.fillStyle = "red";
         ctx.fillRect(this.x, this.y, this.w, this.h);
       }
-
     } else {
       ctx.fillStyle = "orange";
       ctx.fillRect(this.x, this.y, this.w, this.h);
@@ -149,7 +150,7 @@ function resetGame() {
 }
 
 // =====================
-// LOOP
+// GAME LOOP
 // =====================
 let lastTime = 0;
 
@@ -255,17 +256,14 @@ function update(time = 0) {
   });
 
   // PLAYER
-  if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+  if (sprite) {
     ctx.drawImage(sprite, player.x, player.y, player.w, h);
   } else {
     ctx.fillStyle = "lime";
     ctx.fillRect(player.x, player.y, player.w, h);
   }
 
-  // SCORE UI
-  ctx.fillStyle = "rgba(0,0,0,0.4)";
-  ctx.fillRect(canvas.width - 220, 20, 200, 50);
-
+  // SCORE
   ctx.fillStyle = "white";
   ctx.font = "26px Arial";
   ctx.textAlign = "right";
@@ -274,5 +272,30 @@ function update(time = 0) {
   requestAnimationFrame(update);
 }
 
-// START
-update();
+// =====================
+// INIT - LOAD IMAGES
+// =====================
+async function init() {
+  const [
+    stand,
+    crouch,
+    rock1,
+    rock2
+  ] = await Promise.all([
+    loadImage("persos/debout.png"),
+    loadImage("persos/par_terre.png"),
+    loadImage("persos/caillou.png"),
+    loadImage("persos/caillou2.png")
+  ]);
+
+  assets.stand = stand;
+  assets.crouch = crouch;
+  assets.rock1 = rock1;
+  assets.rock2 = rock2;
+
+  player.y = ground() - player.h;
+
+  update();
+}
+
+init();
