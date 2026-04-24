@@ -193,7 +193,7 @@ function update(time = 0) {
 
     ctx.globalAlpha = 0.95;
 
-    const cloudHeight = canvas.height / 7;
+    const cloudHeight = canvas.height / 5.5;
 
     ctx.drawImage(assets.clouds, cloudsX, 0, canvas.width, cloudHeight);
     ctx.drawImage(assets.clouds, cloudsX + canvas.width, 0, canvas.width, cloudHeight);
