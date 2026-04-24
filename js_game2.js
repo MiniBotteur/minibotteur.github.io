@@ -42,9 +42,10 @@ const game = {
 const ground = () => canvas.height - 40;
 
 let bgX = 0;
+let cloudsX = 0;
 
 // =====================
-// PLAYER (inchangé gameplay)
+// PLAYER
 // =====================
 const player = {
   x: 80,
@@ -183,6 +184,23 @@ function update(time = 0) {
     ctx.globalAlpha = 1;
   }
 
+  // ☁️ CLOUDS (7× plus petits, en haut)
+  if (assets.clouds) {
+    if (game.running) {
+      cloudsX -= game.speed * 0.3;
+      if (cloudsX <= -canvas.width) cloudsX = 0;
+    }
+
+    ctx.globalAlpha = 0.95;
+
+    const cloudHeight = canvas.height / 7;
+
+    ctx.drawImage(assets.clouds, cloudsX, 0, canvas.width, cloudHeight);
+    ctx.drawImage(assets.clouds, cloudsX + canvas.width, 0, canvas.width, cloudHeight);
+
+    ctx.globalAlpha = 1;
+  }
+
   // GAME OVER
   if (!game.running) {
     menuBtn.style.display = "block";
@@ -260,9 +278,7 @@ function update(time = 0) {
     game.spawnTimer = 0;
   }
 
-  // =====================
-  // HITBOX CORRIGÉE (JOUEUR RESTAURÉ)
-  // =====================
+  // HITBOX
   const p = {
     x: player.x + 15,
     y: player.y,
@@ -284,7 +300,6 @@ function update(time = 0) {
         h: o.h - 20
       };
     } else {
-      // avions = hitbox complète (FIABLE)
       hitbox = {
         x: o.x,
         y: o.y,
@@ -315,17 +330,26 @@ function update(time = 0) {
 // INIT
 // =====================
 async function init() {
-  const [stand, crouch, rock1, rock2, airplane, background] =
+  const [stand, crouch, rock1, rock2, airplane, background, clouds] =
     await Promise.all([
       loadImage("persos/debout.png"),
       loadImage("persos/par_terre.png"),
       loadImage("persos/caillou.png"),
       loadImage("persos/caillou2.png"),
       loadImage("persos/avion.png"),
-      loadImage("persos/fond.png")
+      loadImage("persos/fond.png"),
+      loadImage("persos/ciel_nuages.png")
     ]);
 
-  Object.assign(assets, { stand, crouch, rock1, rock2, airplane, background });
+  Object.assign(assets, {
+    stand,
+    crouch,
+    rock1,
+    rock2,
+    airplane,
+    background,
+    clouds
+  });
 
   player.y = ground() - player.h;
 
