@@ -64,12 +64,34 @@ const player = {
   crouching: false
 };
 
+// =====================
+// INPUT SYSTEM
+// =====================
 const keys = {};
+let jumpKeyHeld = false;
+
 addEventListener("keydown", (e) => {
   keys[e.code] = true;
+
+  // Espace OU Flèche du haut = même comportement
+  if ((e.code === "Space" || e.code === "ArrowUp") && game.running) {
+    if (!jumpKeyHeld && !player.jumping) {
+      player.vy = player.jumpForce;
+      player.jumping = true;
+    }
+    jumpKeyHeld = true;
+  }
+
   if (!game.running && e.code === "Space") resetGame();
 });
-addEventListener("keyup", (e) => keys[e.code] = false);
+
+addEventListener("keyup", (e) => {
+  keys[e.code] = false;
+
+  if (e.code === "Space" || e.code === "ArrowUp") {
+    jumpKeyHeld = false;
+  }
+});
 
 // =====================
 // OBSTACLES
@@ -131,6 +153,8 @@ function resetGame() {
   player.vy = 0;
   player.jumping = false;
 
+  jumpKeyHeld = false;
+
   menuBtn.style.display = "none";
 }
 
@@ -150,7 +174,7 @@ function updateSpeed(dt) {
 }
 
 // =====================
-// JUMP
+// JUMP PHYSICS
 // =====================
 function updateJumpPhysics() {
   const t = Math.min(1, (game.speed - 3) / 5);
@@ -184,7 +208,7 @@ function update(time = 0) {
     ctx.globalAlpha = 1;
   }
 
-  // ☁️ CLOUDS (7× plus petits, en haut)
+  // CLOUDS
   if (assets.clouds) {
     if (game.running) {
       cloudsX -= game.speed * 0.3;
@@ -192,7 +216,6 @@ function update(time = 0) {
     }
 
     ctx.globalAlpha = 0.95;
-
     const cloudHeight = canvas.height / 5.5;
 
     ctx.drawImage(assets.clouds, cloudsX, 0, canvas.width, cloudHeight);
@@ -206,32 +229,44 @@ function update(time = 0) {
     menuBtn.style.display = "block";
 
     game.obstacles.forEach(o => o.draw());
-
     const h = player.crouching ? 95 : player.h;
     const sprite = player.crouching ? assets.crouch : assets.stand;
     ctx.drawImage(sprite, player.x, player.y, player.w, h);
 
+    // Fond opaque
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(canvas.width/2 - 250, canvas.height/2 - 120, 500, 220);
+
     ctx.fillStyle = "white";
     ctx.textAlign = "center";
-    ctx.font = "50px Arial";
-    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+    ctx.font = "55px Arial";
+    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
 
-    ctx.font = "25px Arial";
+    ctx.font = "28px Arial";
     ctx.fillText("Score : " + Math.floor(game.finalScore),
       canvas.width / 2,
-      canvas.height / 2 + 40
+      canvas.height / 2 + 10
     );
 
-    ctx.font = "18px Arial";
+    ctx.font = "20px Arial";
     ctx.fillText("Appuie sur ESPACE pour recommencer",
       canvas.width / 2,
-      canvas.height / 2 + 80
+      canvas.height / 2 + 55
     );
 
     return requestAnimationFrame(update);
   }
 
-  // SCORE
+  // SCORE (fond opaque)
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(canvas.width - 160, 10, 150, 45);
+
+  ctx.fillStyle = "white";
+  ctx.font = "28px Arial";
+  ctx.textAlign = "right";
+  ctx.fillText(Math.floor(game.score), canvas.width - 20, 43);
+
+  // SCORE UPDATE
   game.score += 0.02 * dt;
 
   updateSpeed(dt);
@@ -250,18 +285,8 @@ function update(time = 0) {
     player.jumping = false;
   }
 
-  // INPUT
-  const jump = keys.Space || keys.ArrowUp;
-  const crouch = keys.ArrowDown;
-
-  if (jump && !player.jumping) {
-    player.vy = player.jumpForce;
-    player.jumping = true;
-  }
-
-  if (!jump && player.vy < 0) player.vy *= 0.65;
-
-  player.crouching = crouch && !player.jumping;
+  // CROUCH
+  player.crouching = keys.ArrowDown && !player.jumping;
 
   const h = player.crouching ? 95 : player.h;
   const sprite = player.crouching ? assets.crouch : assets.stand;
@@ -317,11 +342,6 @@ function update(time = 0) {
   });
 
   ctx.drawImage(sprite, player.x, player.y, player.w, h);
-
-  ctx.fillStyle = "white";
-  ctx.font = "26px Arial";
-  ctx.textAlign = "right";
-  ctx.fillText(Math.floor(game.score), canvas.width - 30, 55);
 
   requestAnimationFrame(update);
 }
