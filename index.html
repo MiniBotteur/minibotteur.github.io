@@ -16,11 +16,25 @@ body {
   flex-direction:column;
 }
 
+h1 {
+  font-size:40px;
+  margin-bottom:30px;
+}
+
 button {
   padding:15px 30px;
   font-size:20px;
   margin:10px;
   cursor:pointer;
+  border:none;
+  border-radius:10px;
+  background:white;
+  color:black;
+  transition:0.2s;
+}
+
+button:hover {
+  background:#ddd;
 }
 </style>
 </head>
@@ -29,7 +43,8 @@ button {
 
 <h1>Menu</h1>
 
-<button onclick="location.href='game2.html'">Jouer</button>
+<button onclick="location.href='game1.html'">Jeu 1</button>
+<button onclick="location.href='game2.html'">Jeu 2</button>
 
 </body>
 </html>
