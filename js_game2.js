@@ -61,11 +61,17 @@ const player = {
   jumpForce: -24,
 
   jumping: false,
-  crouching: false
+  crouching: false,
+
+  crouchFrame: 0,
+  crouchTimer: 0,
+  crouchSpeed: 120,
+
+  drawOffsetX: 0 // 👉 AJOUT
 };
 
 // =====================
-// INPUT SYSTEM
+// INPUT
 // =====================
 const keys = {};
 let jumpKeyHeld = false;
@@ -73,7 +79,6 @@ let jumpKeyHeld = false;
 addEventListener("keydown", (e) => {
   keys[e.code] = true;
 
-  // Espace OU Flèche du haut = même comportement
   if ((e.code === "Space" || e.code === "ArrowUp") && game.running) {
     if (!jumpKeyHeld && !player.jumping) {
       player.vy = player.jumpForce;
@@ -153,6 +158,10 @@ function resetGame() {
   player.vy = 0;
   player.jumping = false;
 
+  player.crouchFrame = 0;
+  player.crouchTimer = 0;
+  player.drawOffsetX = 0;
+
   jumpKeyHeld = false;
 
   menuBtn.style.display = "none";
@@ -229,11 +238,12 @@ function update(time = 0) {
     menuBtn.style.display = "block";
 
     game.obstacles.forEach(o => o.draw());
+
     const h = player.crouching ? 95 : player.h;
     const sprite = player.crouching ? assets.crouch : assets.stand;
-    ctx.drawImage(sprite, player.x, player.y, player.w, h);
 
-    // Fond opaque
+    ctx.drawImage(sprite, player.x + player.drawOffsetX, player.y, player.w, h);
+
     ctx.fillStyle = "rgba(0,0,0,0.65)";
     ctx.fillRect(canvas.width/2 - 250, canvas.height/2 - 120, 500, 220);
 
@@ -257,7 +267,7 @@ function update(time = 0) {
     return requestAnimationFrame(update);
   }
 
-  // SCORE (fond opaque)
+  // SCORE
   ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.fillRect(canvas.width - 160, 10, 150, 45);
 
@@ -266,7 +276,6 @@ function update(time = 0) {
   ctx.textAlign = "right";
   ctx.fillText(Math.floor(game.score), canvas.width - 20, 43);
 
-  // SCORE UPDATE
   game.score += 0.02 * dt;
 
   updateSpeed(dt);
@@ -285,11 +294,34 @@ function update(time = 0) {
     player.jumping = false;
   }
 
-  // CROUCH
+  // CROUCH (ANIMATION LENTE + OFFSET)
   player.crouching = keys.ArrowDown && !player.jumping;
 
+  let sprite;
   const h = player.crouching ? 95 : player.h;
-  const sprite = player.crouching ? assets.crouch : assets.stand;
+
+  if (player.crouching) {
+    player.crouchTimer += dt * 0.6; // 🔥 plus lent
+
+    if (player.crouchTimer > player.crouchSpeed) {
+      player.crouchFrame = (player.crouchFrame + 1) % 2;
+      player.crouchTimer = 0;
+    }
+
+    if (player.crouchFrame === 0) {
+      sprite = assets.crouch;
+      player.drawOffsetX = 0;
+    } else {
+      sprite = assets.crouch2;
+      player.drawOffsetX = 6; // 👉 décalage droite
+    }
+
+  } else {
+    sprite = assets.stand;
+    player.crouchFrame = 0;
+    player.crouchTimer = 0;
+    player.drawOffsetX = 0;
+  }
 
   if (!player.jumping) {
     player.y = ground() - h;
@@ -303,7 +335,7 @@ function update(time = 0) {
     game.spawnTimer = 0;
   }
 
-  // HITBOX
+  // COLLISIONS
   const p = {
     x: player.x + 15,
     y: player.y,
@@ -315,23 +347,9 @@ function update(time = 0) {
     o.update(game.speed);
     o.draw();
 
-    let hitbox;
-
-    if (o.type === "ground") {
-      hitbox = {
-        x: o.x + 12,
-        y: o.y + 15,
-        w: o.w - 24,
-        h: o.h - 20
-      };
-    } else {
-      hitbox = {
-        x: o.x,
-        y: o.y,
-        w: o.w,
-        h: o.h
-      };
-    }
+    let hitbox = o.type === "ground"
+      ? { x: o.x + 12, y: o.y + 15, w: o.w - 24, h: o.h - 20 }
+      : { x: o.x, y: o.y, w: o.w, h: o.h };
 
     if (collide(p, hitbox)) {
       game.running = false;
@@ -341,7 +359,7 @@ function update(time = 0) {
     if (o.x + o.w < 0) game.obstacles.splice(i, 1);
   });
 
-  ctx.drawImage(sprite, player.x, player.y, player.w, h);
+  ctx.drawImage(sprite, player.x + player.drawOffsetX, player.y, player.w, h);
 
   requestAnimationFrame(update);
 }
@@ -350,10 +368,11 @@ function update(time = 0) {
 // INIT
 // =====================
 async function init() {
-  const [stand, crouch, rock1, rock2, airplane, background, clouds] =
+  const [stand, crouch, crouch2, rock1, rock2, airplane, background, clouds] =
     await Promise.all([
       loadImage("persos/debout.png"),
       loadImage("persos/par_terre.png"),
+      loadImage("persos/par_terre2.png"),
       loadImage("persos/caillou.png"),
       loadImage("persos/caillou2.png"),
       loadImage("persos/avion.png"),
@@ -364,6 +383,7 @@ async function init() {
   Object.assign(assets, {
     stand,
     crouch,
+    crouch2,
     rock1,
     rock2,
     airplane,

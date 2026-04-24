@@ -4,468 +4,372 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let clones = [];
-let pellets = [];
-
-// =========================
-//     CONFIGURATION
-// =========================
+// =====================
+// CONFIG
+// =====================
 const WORLD_SIZE = 3000;
-const FOOD_COUNT = 300;
-const BOT_COUNT = 10;
+const FOOD_COUNT = 600;
+const BOT_COUNT = 12;
 
-// =========================
-//     JOUEUR
-// =========================
+// =====================
+// UTILS
+// =====================
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const massToRadius = (m) => Math.sqrt(m);
+
+// =====================
+// PLAYER
+// =====================
 let player = {
     x: WORLD_SIZE / 2,
     y: WORLD_SIZE / 2,
-    radius: 100,
-    speed: 2,
-    mass: 100
+    mass: 160,
+    radius: massToRadius(160)
 };
 
 let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
 
-// =========================
-//     INPUT
-// =========================
+let lastAction = 0;
+const DASH_COOLDOWN = 180;
+
+// =====================
+// WORLD
+// =====================
+let foods = [];
+let bots = [];
+let pellets = [];
+let clones = []; // ✅ AJOUT IMPORTANT
+
+// =====================
+// INPUT
+// =====================
 canvas.addEventListener("mousemove", (e) => {
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
+    const r = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - r.left;
+    mouse.y = e.clientY - r.top;
 });
 
 document.addEventListener("keydown", (e) => {
-    if (e.code === "Space") splitPlayer();
+    if (e.code === "Space") {
+        if (Date.now() - lastAction > DASH_COOLDOWN) {
+            dash();
+            lastAction = Date.now();
+        }
+    }
     if (e.code === "KeyW") shootMass();
 });
 
-// =========================
- //     ZOOM DYNAMIQUE
-// =========================
+// =====================
+// ZOOM
+// =====================
 function getZoom() {
-    // plus tu grossis → plus on dézoome
-    const base = 1.2;
-    const factor = Math.log10(player.mass + 10) / 3;
-    return Math.max(0.4, base - factor);
+    return clamp(1.25 - Math.log10(player.mass) / 3, 0.35, 1.2);
 }
 
-// =========================
-//     NOURRITURE
-// =========================
-let foods = [];
-
+// =====================
+// FOOD
+// =====================
 function spawnFood() {
     foods = [];
     for (let i = 0; i < FOOD_COUNT; i++) {
         foods.push({
             x: Math.random() * WORLD_SIZE,
             y: Math.random() * WORLD_SIZE,
-            radius: 4,
-            color: `hsl(${Math.random() * 360}, 80%, 60%)`
+            radius: 7,
+            color: `hsl(${Math.random() * 360},90%,60%)`
         });
     }
 }
 
-// =========================
-//     BOTS
-// =========================
-let bots = [];
-
+// =====================
+// BOTS
+// =====================
 function spawnBots() {
     bots = [];
     for (let i = 0; i < BOT_COUNT; i++) {
+        let mass = 80;
         bots.push({
             x: Math.random() * WORLD_SIZE,
             y: Math.random() * WORLD_SIZE,
-            radius: 30,
-            mass: 30,
-            speed: 1.5,
-            dirX: Math.random() * 2 - 1,
-            dirY: Math.random() * 2 - 1,
-            color: `hsl(${Math.random() * 360}, 70%, 50%)`
+            mass,
+            radius: massToRadius(mass),
+            vx: Math.random() * 2 - 1,
+            vy: Math.random() * 2 - 1,
+            color: `hsl(${Math.random() * 360},70%,55%)`
         });
     }
 }
 
-// =========================
-//     MISE À JOUR JOUEUR
-// =========================
+// =====================
+// PLAYER MOVE
+// =====================
 function updatePlayer() {
     let dx = mouse.x - canvas.width / 2;
     let dy = mouse.y - canvas.height / 2;
-    let dist = Math.hypot(dx, dy);
+    let d = Math.hypot(dx, dy);
 
-    player.speed = Math.max(0.8, 6 / Math.sqrt(player.mass));
+    let speed = clamp(6 / Math.sqrt(player.mass), 0.8, 4);
 
-    if (dist > 1) {
-        player.x += (dx / dist) * player.speed;
-        player.y += (dy / dist) * player.speed;
+    if (d > 1) {
+        player.x += (dx / d) * speed;
+        player.y += (dy / d) * speed;
     }
 
-    player.x = Math.max(player.radius, Math.min(WORLD_SIZE - player.radius, player.x));
-    player.y = Math.max(player.radius, Math.min(WORLD_SIZE - player.radius, player.y));
+    player.x = clamp(player.x, player.radius, WORLD_SIZE - player.radius);
+    player.y = clamp(player.y, player.radius, WORLD_SIZE - player.radius);
 }
 
-// =========================
-//     COLLISIONS NOURRITURE
-// =========================
-function checkFoodCollisions() {
+// =====================
+// FOOD
+// =====================
+function checkFood() {
     for (let i = foods.length - 1; i >= 0; i--) {
-        const f = foods[i];
-        const dx = f.x - player.x;
-        const dy = f.y - player.y;
-        const dist = Math.hypot(dx, dy);
+        let f = foods[i];
 
-        if (dist < player.radius + f.radius) {
+        if (dist(player, f) < player.radius) {
             foods.splice(i, 1);
             player.mass += 2;
-            player.radius = Math.sqrt(player.mass);
+            player.radius = massToRadius(player.mass);
         }
     }
 
-    if (foods.length < FOOD_COUNT / 2) spawnFood();
+    if (foods.length < FOOD_COUNT * 0.6) spawnFood();
 }
 
-// =========================
-//     MISE À JOUR BOTS
-// =========================
+// =====================
+// BOTS
+// =====================
 function updateBots() {
-    for (let b of bots) {
+    for (let i = bots.length - 1; i >= 0; i--) {
+        let b = bots[i];
 
-        b.speed = Math.max(0.8, 6 / Math.sqrt(b.mass));
+        let dx = player.x - b.x;
+        let dy = player.y - b.y;
+        let d = Math.hypot(dx, dy) || 1;
 
-        b.x += b.dirX * b.speed;
-        b.y += b.dirY * b.speed;
-
-        if (b.x < b.radius || b.x > WORLD_SIZE - b.radius) b.dirX *= -1;
-        if (b.y < b.radius || b.y > WORLD_SIZE - b.radius) b.dirY *= -1;
-
-        if (Math.random() < 0.01) {
-            b.dirX = Math.random() * 2 - 1;
-            b.dirY = Math.random() * 2 - 1;
+        if (player.mass > b.mass * 1.3 && d < 350) {
+            b.vx = -dx / d;
+            b.vy = -dy / d;
+        } else if (Math.random() < 0.01) {
+            b.vx = Math.random() * 2 - 1;
+            b.vy = Math.random() * 2 - 1;
         }
 
-        for (let i = foods.length - 1; i >= 0; i--) {
-            const f = foods[i];
-            const dx = f.x - b.x;
-            const dy = f.y - b.y;
-            const dist = Math.hypot(dx, dy);
+        b.x += b.vx * 2;
+        b.y += b.vy * 2;
 
-            if (dist < b.radius + f.radius) {
-                foods.splice(i, 1);
+        b.x = clamp(b.x, b.radius, WORLD_SIZE - b.radius);
+        b.y = clamp(b.y, b.radius, WORLD_SIZE - b.radius);
+
+        for (let j = foods.length - 1; j >= 0; j--) {
+            if (dist(b, foods[j]) < b.radius) {
                 b.mass += 2;
-                b.radius = Math.sqrt(b.mass);
+                b.radius = massToRadius(b.mass);
+                foods.splice(j, 1);
             }
         }
 
-        const dx = b.x - player.x;
-        const dy = b.y - player.y;
-        const dist = Math.hypot(dx, dy);
+        let d2 = dist(player, b);
 
-        if (dist < player.radius + b.radius && player.radius > b.radius * 1.1) {
-            player.mass += b.mass;
-            player.radius = Math.sqrt(player.mass);
-            bots.splice(bots.indexOf(b), 1);
-            continue;
-        }
-
-        if (dist < player.radius + b.radius && b.radius > player.radius * 1.1) {
-            alert("Tu t'es fait manger !");
-            document.location.reload();
+        if (d2 < player.radius + b.radius) {
+            if (player.radius > b.radius * 1.1) {
+                player.mass += b.mass;
+                player.radius = massToRadius(player.mass);
+                bots.splice(i, 1);
+            } else {
+                player.mass = 160;
+                player.radius = massToRadius(player.mass);
+                player.x = WORLD_SIZE / 2;
+                player.y = WORLD_SIZE / 2;
+            }
         }
     }
 }
 
-// =========================
-//     SPLIT (ESPACE)
-// =========================
-function splitPlayer() {
+// =====================
+// DASH (SPLIT FIXÉ)
+// =====================
+function dash() {
     if (player.mass < 60) return;
 
-    const angle = Math.atan2(mouse.y - canvas.height / 2, mouse.x - canvas.width / 2);
+    let angle = Math.atan2(
+        mouse.y - canvas.height / 2,
+        mouse.x - canvas.width / 2
+    );
 
-    const cloneMass = player.mass / 2;
-    const cloneRadius = Math.sqrt(cloneMass);
+    let splitMass = player.mass / 2;
 
     clones.push({
-        x: player.x + Math.cos(angle) * player.radius,
-        y: player.y + Math.sin(angle) * player.radius,
-        mass: cloneMass,
-        radius: cloneRadius,
-        speed: 8,
-        dirX: Math.cos(angle),
-        dirY: Math.sin(angle),
-        spawnTime: Date.now(),
-        merging: false
+        x: player.x,
+        y: player.y,
+        mass: splitMass,
+        radius: massToRadius(splitMass),
+        vx: Math.cos(angle) * 14,
+        vy: Math.sin(angle) * 14,
+        life: Date.now()
     });
 
-    player.mass /= 2;
-    player.radius = Math.sqrt(player.mass);
+    player.mass = splitMass;
+    player.radius = massToRadius(player.mass);
 }
 
-// =========================
-//     FEED (W)
-// =========================
+// =====================
+// CLONES UPDATE
+// =====================
+function updateClones() {
+    for (let i = clones.length - 1; i >= 0; i--) {
+        let c = clones[i];
+
+        c.x += c.vx;
+        c.y += c.vy;
+
+        c.vx *= 0.92;
+        c.vy *= 0.92;
+
+        if (dist(player, c) < player.radius) {
+            player.mass += c.mass;
+            player.radius = massToRadius(player.mass);
+            clones.splice(i, 1);
+            continue;
+        }
+
+        if (Date.now() - c.life > 12000) {
+            clones.splice(i, 1);
+        }
+    }
+}
+
+// =====================
+// SHOOT
+// =====================
 function shootMass() {
     if (player.mass < 40) return;
 
-    const angle = Math.atan2(mouse.y - canvas.height / 2, mouse.x - canvas.width / 2);
+    let angle = Math.atan2(
+        mouse.y - canvas.height / 2,
+        mouse.x - canvas.width / 2
+    );
 
     pellets.push({
         x: player.x,
         y: player.y,
+        vx: Math.cos(angle) * 10,
+        vy: Math.sin(angle) * 10,
         radius: 6,
-        speed: 10,
-        dirX: Math.cos(angle),
-        dirY: Math.sin(angle),
         color: "white"
     });
 
     player.mass -= 10;
-    player.radius = Math.sqrt(player.mass);
+    player.radius = massToRadius(player.mass);
 }
 
-// =========================
-//     UPDATE CLONES (fusion auto)
-// =========================
-function updateClones() {
-    const now = Date.now();
-    for (let i = clones.length - 1; i >= 0; i--) {
-        const c = clones[i];
-
-        if (!c.merging && now - c.spawnTime > 12000) {
-            c.merging = true;
-        }
-
-        if (c.merging) {
-            let dx = player.x - c.x;
-            let dy = player.y - c.y;
-            let dist = Math.hypot(dx, dy);
-            if (dist > 1) {
-                c.x += (dx / dist) * c.speed;
-                c.y += (dy / dist) * c.speed;
-            }
-
-            if (dist < player.radius) {
-                player.mass += c.mass;
-                player.radius = Math.sqrt(player.mass);
-                clones.splice(i, 1);
-                continue;
-            }
-        } else {
-            c.x += c.dirX * c.speed;
-            c.y += c.dirY * c.speed;
-            c.speed *= 0.95;
-            if (c.speed < 1) c.speed = 1;
-        }
-
-        c.x = Math.max(c.radius, Math.min(WORLD_SIZE - c.radius, c.x));
-        c.y = Math.max(c.radius, Math.min(WORLD_SIZE - c.radius, c.y));
-    }
-}
-
-// =========================
-//     UPDATE PELLETS
-// =========================
+// =====================
+// PELLETS
+// =====================
 function updatePellets() {
-    for (let p of pellets) {
-        p.x += p.dirX * p.speed;
-        p.y += p.dirY * p.speed;
+    for (let i = pellets.length - 1; i >= 0; i--) {
+        let p = pellets[i];
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.y < 0 || p.x > WORLD_SIZE || p.y > WORLD_SIZE) {
+            pellets.splice(i, 1);
+        }
     }
 }
 
-// =========================
-//     DESSIN CLONES + PELLETS
-// =========================
-function drawClones(camera) {
-    for (let c of clones) {
-        const screenX = c.x - camera.x;
-        const screenY = c.y - camera.y;
-
-        ctx.fillStyle = "white";
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, c.radius, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
-
-function drawPellets(camera) {
-    for (let p of pellets) {
-        const screenX = p.x - camera.x;
-        const screenY = p.y - camera.y;
-
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, p.radius, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
-
-// =========================
-//     DESSIN NOURRITURE + BOTS + JOUEUR
-// =========================
-function drawFood(camera) {
-    for (const f of foods) {
-        const screenX = f.x - camera.x;
-        const screenY = f.y - camera.y;
-
-        ctx.fillStyle = f.color;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, f.radius, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
-function drawWorldBorder(camera) {
-    ctx.strokeStyle = "rgba(255,255,255,0.4)";
-    ctx.lineWidth = 10;
-
+// =====================
+// DRAW
+// =====================
+function draw(o, color, cam, zoom) {
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.rect(
-        -camera.x - WORLD_SIZE / 2 + player.x,
-        -camera.y - WORLD_SIZE / 2 + player.y,
-        WORLD_SIZE,
-        WORLD_SIZE
+    ctx.arc(
+        (o.x - cam.x) * zoom + canvas.width / 2,
+        (o.y - cam.y) * zoom + canvas.height / 2,
+        o.radius * zoom,
+        0,
+        Math.PI * 2
     );
-    ctx.stroke();
-}
-
-
-function drawBots(camera) {
-    for (let b of bots) {
-        const screenX = b.x - camera.x;
-        const screenY = b.y - camera.y;
-
-        ctx.fillStyle = b.color;
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, b.radius, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
-
-function drawPlayer() {
-    ctx.fillStyle = "white";
-    ctx.beginPath();
-    ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
     ctx.fill();
 }
 
-// =========================
-//     GRILLE + MONDE
-// =========================
-function drawGrid(camera) {
-    ctx.strokeStyle = "rgba(255,255,255,0.05)";
-    ctx.lineWidth = 1;
-
-    const step = 50;
-    const startX = -WORLD_SIZE / 2;
-    const endX = WORLD_SIZE / 2;
-    const startY = -WORLD_SIZE / 2;
-    const endY = WORLD_SIZE / 2;
-
-    for (let x = startX; x <= endX; x += step) {
-        ctx.beginPath();
-        ctx.moveTo(x - camera.x + player.x, startY - camera.y + player.y);
-        ctx.lineTo(x - camera.x + player.x, endY - camera.y + player.y);
-        ctx.stroke();
-    }
-
-    for (let y = startY; y <= endY; y += step) {
-        ctx.beginPath();
-        ctx.moveTo(startX - camera.x + player.x, y - camera.y + player.y);
-        ctx.lineTo(endX - camera.x + player.x, y - camera.y + player.y);
-        ctx.stroke();
-    }
-}
-
-// =========================
-//     MINI-MAP
-// =========================
+// =====================
+// MINI MAP
+// =====================
 function drawMiniMap() {
-    const mapSize = 200;
-    const mapX = canvas.width - mapSize - 20;
-    const mapY = 20;
+    const size = 150;
+    const x = canvas.width - size - 20;
+    const y = 20;
 
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
-    ctx.fillRect(mapX, mapY, mapSize, mapSize);
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(x, y, size, size);
 
     ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(mapX, mapY, mapSize, mapSize);
-
-    const px = mapX + (player.x / WORLD_SIZE) * mapSize;
-    const py = mapY + (player.y / WORLD_SIZE) * mapSize;
+    ctx.strokeRect(x, y, size, size);
 
     ctx.fillStyle = "white";
     ctx.beginPath();
-    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.arc(
+        x + (player.x / WORLD_SIZE) * size,
+        y + (player.y / WORLD_SIZE) * size,
+        3,
+        0,
+        Math.PI * 2
+    );
     ctx.fill();
-
-    for (let b of bots) {
-        const bx = mapX + (b.x / WORLD_SIZE) * mapSize;
-        const by = mapY + (b.y / WORLD_SIZE) * mapSize;
-
-        ctx.fillStyle = b.color;
-        ctx.beginPath();
-        ctx.arc(bx, by, 4, 0, Math.PI * 2);
-        ctx.fill();
-    }
 }
 
-// =========================
-//     SCORE
-// =========================
-function drawScore() {
+// =====================
+// UI
+// =====================
+function drawUI() {
+    const w = 200;
+    const h = 50;
+    const x = canvas.width - w - 20;
+    const y = canvas.height - h - 20;
+
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(x, y, w, h);
+
     ctx.fillStyle = "white";
-    ctx.font = "28px Arial";
-    ctx.textAlign = "right";
-    ctx.fillText("Masse : " + Math.floor(player.mass), canvas.width - 30, canvas.height - 30);
+    ctx.font = "18px Arial";
+    ctx.fillText("Mass: " + Math.floor(player.mass), x + 20, y + 32);
 }
 
-// =========================
-//     BOUCLE DE JEU
-// =========================
+// =====================
+// LOOP
+// =====================
 function loop() {
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const zoom = getZoom();
+    let zoom = getZoom();
+    let cam = { x: player.x, y: player.y };
 
-    ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.scale(zoom, zoom);
-
-    const camera = {
-        x: player.x,
-        y: player.y
-    };
-
-    drawWorldBorder(camera);
-	drawGrid(camera);
-    drawFood(camera);
-    drawBots(camera);
-    drawClones(camera);
-    drawPellets(camera);
-    drawPlayer();
-
-    ctx.restore();
-
-    drawMiniMap();
-    drawScore();
+    foods.forEach(f => draw(f, f.color, cam, zoom));
+    bots.forEach(b => draw(b, b.color, cam, zoom));
+    pellets.forEach(p => draw(p, p.color, cam, zoom));
+    clones.forEach(c => draw(c, "white", cam, zoom));
+    draw(player, "white", cam, zoom);
 
     updatePlayer();
     updateBots();
     updateClones();
     updatePellets();
-    checkFoodCollisions();
+    checkFood();
+
+    drawMiniMap();
+    drawUI();
 
     requestAnimationFrame(loop);
 }
 
-// =========================
-//     LANCEMENT
-// =========================
+// =====================
+// START
+// =====================
 spawnFood();
 spawnBots();
 loop();
