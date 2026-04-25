@@ -1,14 +1,30 @@
+const preload = [
+  "assets/persos/debout.png",
+  "assets/persos/debout2.png", // ✅ ajouté
+  "assets/persos/par_terre.png",
+  "assets/persos/par_terre2.png",
+  "assets/persos/caillou.png",
+  "assets/persos/caillou2.png",
+  "assets/persos/avion.png",
+  "assets/persos/fond.png",
+  "assets/persos/ciel_nuages.png"
+];
+
+preload.forEach(src => {
+  const img = new Image();
+  img.src = src;
+});
+
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
+
 const startBtn = document.getElementById("startBtn");
 const menuBtn = document.getElementById("menuBtn");
 
 let gameStarted = false;
 
 startBtn.onclick = () => {
-  // 🔥 Supprime le fond d’avant-jeu
   document.body.classList.add("playing");
-
   startBtn.style.display = "none";
   gameStarted = true;
   update();
@@ -39,7 +55,8 @@ const game = {
   finalScore: 0,
   obstacles: [],
   spawnTimer: 0,
-  spawnRate: 1400
+  spawnRate: 1400,
+  lastDelay: null
 };
 
 const ground = () => canvas.height - 40;
@@ -47,9 +64,6 @@ const ground = () => canvas.height - 40;
 let bgX = 0;
 let cloudsX = 0;
 
-// =====================
-// PLAYER
-// =====================
 const player = {
   x: 80,
   y: 0,
@@ -68,14 +82,11 @@ const player = {
 
   crouchFrame: 0,
   crouchTimer: 0,
-  crouchSpeed: 120,
+  crouchSpeed: 220,
 
   drawOffsetX: 0
 };
 
-// =====================
-// INPUT
-// =====================
 const keys = {};
 let jumpKeyHeld = false;
 
@@ -95,15 +106,9 @@ addEventListener("keydown", (e) => {
 
 addEventListener("keyup", (e) => {
   keys[e.code] = false;
-
-  if (e.code === "Space" || e.code === "ArrowUp") {
-    jumpKeyHeld = false;
-  }
+  if (e.code === "Space" || e.code === "ArrowUp") jumpKeyHeld = false;
 });
 
-// =====================
-// OBSTACLES
-// =====================
 class Obstacle {
   constructor(type) {
     this.type = type;
@@ -134,9 +139,6 @@ class Obstacle {
   }
 }
 
-// =====================
-// COLLISION
-// =====================
 function collide(a, b) {
   return (
     a.x < b.x + b.w &&
@@ -146,9 +148,6 @@ function collide(a, b) {
   );
 }
 
-// =====================
-// RESET
-// =====================
 function resetGame() {
   game.running = true;
   game.speed = 3;
@@ -156,6 +155,7 @@ function resetGame() {
   game.finalScore = 0;
   game.obstacles = [];
   game.spawnTimer = 0;
+  game.lastDelay = null;
 
   player.y = ground() - player.h;
   player.vy = 0;
@@ -170,70 +170,42 @@ function resetGame() {
   menuBtn.style.display = "none";
 }
 
-// =====================
-// SPEED
-// =====================
 function updateSpeed(dt) {
-
-  // Vitesse de base
   if (game.score < 500) {
-    game.speed = 3 + (game.score / 500) * 0.8; 
+    game.speed = 2.5 + (game.score / 500) * 0.8;
   }
-
-  // 🔥 Palier 1 : 500 points
   else if (game.score < 1000) {
-    game.speed = 3.8 + ((game.score - 500) / 500) * 1.2;
+    game.speed = 3 + ((game.score - 500) / 500) * 1.2;
   }
-
-  // 🔥 Palier 2 : 1000 points
   else if (game.score < 1500) {
-    game.speed = 5 + ((game.score - 1000) / 500) * 1.5;
+    game.speed = 4.5 + ((game.score - 1000) / 500) * 1.5;
   }
-
-  // 🔥 Palier 3 : 1500 points
   else {
-    game.speed = 6.5 + Math.min(2, (game.score - 1500) / 2000);
+    game.speed = 6 + Math.min(2, (game.score - 1500) / 2000);
   }
 
-  // Spawn rate lié à la vitesse
   game.spawnRate = 1400 - Math.min(700, game.speed * 90);
 }
 
-
-
-
-// =====================
-// JUMP PHYSICS
-// =====================
 function updateJumpPhysics() {
   const t = Math.min(1, (game.speed - 3) / 5);
-
-  // 🌙 Gravité beaucoup plus faible = montée lente + descente lente
-  player.gravity = player.baseGravity + t * 0.18; // avant 0.32
-
-  // 🌙 Jump moins puissant = montée plus douce
-  player.jumpForce = player.baseJump + 2 - t * 1.2; // avant +4 - t*2
+  player.gravity = player.baseGravity + t * 0.18;
+  player.jumpForce = player.baseJump + 2 - t * 1.2;
 }
-
-
-
-
-
 
 let lastTime = 0;
 
-// =====================
-// LOOP
-// =====================
 function update(time = 0) {
-  const dt = time - lastTime;
+  let dt = time - lastTime;
   lastTime = time;
+
+  dt = Math.min(dt, 40);
+  ctx.imageSmoothingEnabled = true;
 
   if (!gameStarted) return requestAnimationFrame(update);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // BACKGROUND
   if (assets.background) {
     if (game.running) {
       bgX -= game.speed;
@@ -246,7 +218,6 @@ function update(time = 0) {
     ctx.globalAlpha = 1;
   }
 
-  // CLOUDS
   if (assets.clouds) {
     if (game.running) {
       cloudsX -= game.speed * 0.3;
@@ -262,7 +233,6 @@ function update(time = 0) {
     ctx.globalAlpha = 1;
   }
 
-  // GAME OVER
   if (!game.running) {
     menuBtn.style.display = "block";
 
@@ -296,7 +266,6 @@ function update(time = 0) {
     return requestAnimationFrame(update);
   }
 
-  // SCORE
   ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.fillRect(canvas.width - 160, 10, 150, 45);
 
@@ -310,40 +279,25 @@ function update(time = 0) {
   updateSpeed(dt);
   updateJumpPhysics();
 
-  // PHYSICS
-  player.vy += player.gravity;
-  player.vy = Math.min(player.vy, 25);
-  player.y += player.vy;
-
-  const g = ground() - player.h;
-
-  if (player.y > g) {
-    player.y = g;
-    player.vy = 0;
-    player.jumping = false;
-  }
-
-  // CROUCH
   player.crouching = keys.ArrowDown && !player.jumping;
 
   let sprite;
   const h = player.crouching ? 95 : player.h;
 
-  if (player.crouching) {
-    player.crouchTimer += dt * 0.6;
+  if (player.jumping) {
+    sprite = assets.stand2; // ✅ saut
 
-    if (player.crouchTimer > player.crouchSpeed) {
+  } else if (player.crouching) {
+
+    player.crouchTimer += dt;
+
+    while (player.crouchTimer >= player.crouchSpeed) {
       player.crouchFrame = (player.crouchFrame + 1) % 2;
-      player.crouchTimer = 0;
+      player.crouchTimer -= player.crouchSpeed;
     }
 
-    if (player.crouchFrame === 0) {
-      sprite = assets.crouch;
-      player.drawOffsetX = 0;
-    } else {
-      sprite = assets.crouch2;
-      player.drawOffsetX = 6;
-    }
+    sprite = player.crouchFrame === 0 ? assets.crouch : assets.crouch2;
+    player.drawOffsetX = 0;
 
   } else {
     sprite = assets.stand;
@@ -352,64 +306,26 @@ function update(time = 0) {
     player.drawOffsetX = 0;
   }
 
-  if (!player.jumping) {
-    player.y = ground() - h;
+  player.vy += player.gravity;
+  player.vy = Math.min(player.vy, 25);
+  player.y += player.vy;
+
+  const g = ground() - h;
+
+  if (player.y > g) {
+    player.y = g;
+    player.vy = 0;
+    player.jumping = false;
   }
 
-// SPAWN
-game.spawnTimer += dt;
+  game.spawnTimer += dt;
 
-if (game.spawnTimer > game.spawnRate) {
-
-  // 🔥 Type d'obstacle aléatoire
-  const type = Math.random() < 0.55 ? "ground" : "air";
-  game.obstacles.push(new Obstacle(type));
-
-  // ============================
-  // 🔥 Nouveau système aléatoire anti-pattern
-  // ============================
-
-  let min, max;
-
-  if (game.score < 500) {
-    min = 500;
-    max = 2000;
-  }
-  else if (game.score < 1000) {
-    min = 400;
-    max = 1800;
-  }
-  else if (game.score < 1500) {
-    min = 300;
-    max = 1600;
-  }
-  else {
-    min = 250;
-    max = 1400;
+  if (game.spawnTimer > game.spawnRate) {
+    let type = Math.random() < 0.55 ? "ground" : "air";
+    game.obstacles.push(new Obstacle(type));
+    game.spawnTimer = 0;
   }
 
-  // 🎲 1) Spawn normal (70% du temps)
-  // variable aléatoire pure entre min et max
-  let delay = min + Math.random() * (max - min);
-
-  // 🎲 2) Spawn très rapproché (10% du temps)
-  if (Math.random() < 0.10) {
-    delay = 150 + Math.random() * 200;
-  }
-
-  // 🎲 3) Long trou sans obstacle (10% du temps)
-  if (Math.random() < 0.10) {
-    delay = max + Math.random() * 1200;
-  }
-
-  game.spawnRate = delay;
-  game.spawnTimer = 0;
-}
-
-
-
-
-  // COLLISIONS
   const p = {
     x: player.x + 15,
     y: player.y,
@@ -417,7 +333,9 @@ if (game.spawnTimer > game.spawnRate) {
     h: h
   };
 
-  game.obstacles.forEach((o, i) => {
+  for (let i = game.obstacles.length - 1; i >= 0; i--) {
+    const o = game.obstacles[i];
+
     o.update(game.speed);
     o.draw();
 
@@ -430,21 +348,21 @@ if (game.spawnTimer > game.spawnRate) {
       game.finalScore = game.score;
     }
 
-    if (o.x + o.w < 0) game.obstacles.splice(i, 1);
-  });
+    if (o.x + o.w < 0) {
+      game.obstacles.splice(i, 1);
+    }
+  }
 
   ctx.drawImage(sprite, player.x + player.drawOffsetX, player.y, player.w, h);
 
   requestAnimationFrame(update);
 }
 
-// =====================
-// INIT
-// =====================
 async function init() {
-  const [stand, crouch, crouch2, rock1, rock2, airplane, background, clouds] =
+  const [stand, stand2, crouch, crouch2, rock1, rock2, airplane, background, clouds] =
     await Promise.all([
       loadImage("assets/persos/debout.png"),
+      loadImage("assets/persos/debout2.png"), // ✅ ajouté
       loadImage("assets/persos/par_terre.png"),
       loadImage("assets/persos/par_terre2.png"),
       loadImage("assets/persos/caillou.png"),
@@ -456,6 +374,7 @@ async function init() {
 
   Object.assign(assets, {
     stand,
+    stand2,
     crouch,
     crouch2,
     rock1,
