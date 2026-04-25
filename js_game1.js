@@ -64,7 +64,18 @@ document.addEventListener("keydown", (e) => {
 // ZOOM
 // =====================
 function getZoom() {
-    return clamp(1.25 - Math.log10(player.mass) / 3, 0.35, 1.2);
+    const base = 1.2;
+    const minZoom = 0.35;
+    const scale = Math.sqrt(player.mass) * 0.02;
+
+    return clamp(base - scale, minZoom, base);
+}
+
+function getCamera() {
+    return {
+        x: player.x,
+        y: player.y
+    };
 }
 
 // =====================
@@ -280,19 +291,25 @@ function updatePellets() {
     }
 }
 
+
+function worldToScreen(x, y, cam, zoom) {
+    return {
+        x: (x - cam.x) * zoom + canvas.width / 2,
+        y: (y - cam.y) * zoom + canvas.height / 2
+    };
+}
+
 // =====================
 // DRAW
 // =====================
 function draw(o, color, cam, zoom) {
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(
-        (o.x - cam.x) * zoom + canvas.width / 2,
-        (o.y - cam.y) * zoom + canvas.height / 2,
-        o.radius * zoom,
-        0,
-        Math.PI * 2
-    );
+
+    const screenX = canvas.width / 2 + (o.x - cam.x) * zoom;
+    const screenY = canvas.height / 2 + (o.y - cam.y) * zoom;
+
+    ctx.arc(screenX, screenY, o.radius * zoom, 0, Math.PI * 2);
     ctx.fill();
 }
 
@@ -347,7 +364,7 @@ function loop() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     let zoom = getZoom();
-    let cam = { x: player.x, y: player.y };
+    let cam = getCamera();
 
     foods.forEach(f => draw(f, f.color, cam, zoom));
     bots.forEach(b => draw(b, b.color, cam, zoom));
