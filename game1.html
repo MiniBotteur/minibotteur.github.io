@@ -3,56 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon Jeu Web</title>
+    <title>Jeu 1</title>
 
-    <style>
-        body {
-            margin: 0;
-            background: #111;
-            color: white;
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        header {
-            padding: 20px;
-            text-align: center;
-        }
-
-        #game-container {
-            margin-top: 20px;
-            background: #222;
-            border: 2px solid #444;
-            width: 900px;
-            height: 600px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        canvas {
-            background: #000;
-        }
-    </style>
+    <link rel="stylesheet" href="game1.css">
 </head>
 
 <body>
 
-    <!-- Zone où ton jeu sera affiché -->
-    <div id="game-container">
-        <!-- Tu pourras remplacer ce canvas par ton propre jeu -->
-		<button onclick="location.href='index.html'" 
-style="position:absolute; top:20px; left:20px; padding:10px 20px; font-size:18px;">
-⬅ Retour au menu
-</button>
+<div id="game-container">
 
-        <canvas id="gameCanvas" width="900" height="600"></canvas>
-    </div>
+    <button onclick="location.href='index.html'" class="menu-btn">
+        ⬅ Retour
+    </button>
 
-    <!-- Ton script de jeu -->
-    <script src="js_game1.js"></script>
+    <canvas id="gameCanvas" width="900" height="600"></canvas>
+
+</div>
+
+<script src="js_game1.js"></script>
 
 </body>
 </html>
