@@ -174,16 +174,31 @@ function resetGame() {
 // SPEED
 // =====================
 function updateSpeed(dt) {
-  if (game.score < 5000) {
-    game.speed = 3 + (game.score / 5000) * 1.5;
-  } else if (game.score < 15000) {
-    game.speed = 4.5 + ((game.score - 5000) / 10000) * 3;
-  } else {
-    game.speed = Math.min(8, game.speed + 0.002 * dt);
+
+  // Vitesse de base
+  if (game.score < 500) {
+    game.speed = 3 + (game.score / 500) * 0.8; 
   }
 
-  game.spawnRate = 1400 - Math.min(600, game.speed * 80);
+  // 🔥 Palier 1 : 500 points
+  else if (game.score < 1000) {
+    game.speed = 3.8 + ((game.score - 500) / 500) * 1.2;
+  }
+
+  // 🔥 Palier 2 : 1000 points
+  else if (game.score < 1500) {
+    game.speed = 5 + ((game.score - 1000) / 500) * 1.5;
+  }
+
+  // 🔥 Palier 3 : 1500 points
+  else {
+    game.speed = 6.5 + Math.min(2, (game.score - 1500) / 2000);
+  }
+
+  // Spawn rate lié à la vitesse
+  game.spawnRate = 1400 - Math.min(700, game.speed * 90);
 }
+
 
 
 
@@ -193,12 +208,13 @@ function updateSpeed(dt) {
 function updateJumpPhysics() {
   const t = Math.min(1, (game.speed - 3) / 5);
 
-  // 🔥 Gravité encore un peu plus faible = saut plus long
-  player.gravity = player.baseGravity + t * 0.32;
+  // 🌙 Gravité beaucoup plus faible = montée lente + descente lente
+  player.gravity = player.baseGravity + t * 0.18; // avant 0.32
 
-  // 🔥 Jump légèrement plus fort = un tout petit peu plus haut
-  player.jumpForce = player.baseJump + 4 - t * 2;
+  // 🌙 Jump moins puissant = montée plus douce
+  player.jumpForce = player.baseJump + 2 - t * 1.2; // avant +4 - t*2
 }
+
 
 
 
@@ -340,13 +356,58 @@ function update(time = 0) {
     player.y = ground() - h;
   }
 
-  // SPAWN
-  game.spawnTimer += dt;
+// SPAWN
+game.spawnTimer += dt;
 
-  if (game.spawnTimer > game.spawnRate) {
-    game.obstacles.push(new Obstacle(Math.random() > 0.5 ? "ground" : "air"));
-    game.spawnTimer = 0;
+if (game.spawnTimer > game.spawnRate) {
+
+  // 🔥 Type d'obstacle aléatoire
+  const type = Math.random() < 0.55 ? "ground" : "air";
+  game.obstacles.push(new Obstacle(type));
+
+  // ============================
+  // 🔥 Nouveau système aléatoire anti-pattern
+  // ============================
+
+  let min, max;
+
+  if (game.score < 500) {
+    min = 500;
+    max = 2000;
   }
+  else if (game.score < 1000) {
+    min = 400;
+    max = 1800;
+  }
+  else if (game.score < 1500) {
+    min = 300;
+    max = 1600;
+  }
+  else {
+    min = 250;
+    max = 1400;
+  }
+
+  // 🎲 1) Spawn normal (70% du temps)
+  // variable aléatoire pure entre min et max
+  let delay = min + Math.random() * (max - min);
+
+  // 🎲 2) Spawn très rapproché (10% du temps)
+  if (Math.random() < 0.10) {
+    delay = 150 + Math.random() * 200;
+  }
+
+  // 🎲 3) Long trou sans obstacle (10% du temps)
+  if (Math.random() < 0.10) {
+    delay = max + Math.random() * 1200;
+  }
+
+  game.spawnRate = delay;
+  game.spawnTimer = 0;
+}
+
+
+
 
   // COLLISIONS
   const p = {

@@ -12,7 +12,7 @@ body {
   justify-content: center;
   align-items: center;
   font-family: 'Segoe UI', Arial, sans-serif;
-  background: url("assets/index/background.png") no-repeat center center fixed;
+  background: url("assets/index/background.jpg") no-repeat center center fixed;
   background-size: cover;
   color: white;
   padding: 20px; /* utile pour petits écrans */
