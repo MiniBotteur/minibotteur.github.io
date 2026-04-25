@@ -6,6 +6,9 @@ const menuBtn = document.getElementById("menuBtn");
 let gameStarted = false;
 
 startBtn.onclick = () => {
+  // 🔥 Supprime le fond d’avant-jeu
+  document.body.classList.add("playing");
+
   startBtn.style.display = "none";
   gameStarted = true;
   update();
@@ -67,7 +70,7 @@ const player = {
   crouchTimer: 0,
   crouchSpeed: 120,
 
-  drawOffsetX: 0 // 👉 AJOUT
+  drawOffsetX: 0
 };
 
 // =====================
@@ -182,14 +185,24 @@ function updateSpeed(dt) {
   game.spawnRate = 1400 - Math.min(600, game.speed * 80);
 }
 
+
+
 // =====================
 // JUMP PHYSICS
 // =====================
 function updateJumpPhysics() {
   const t = Math.min(1, (game.speed - 3) / 5);
-  player.gravity = player.baseGravity + t * 0.7;
-  player.jumpForce = player.baseJump - t * 3;
+
+  // 🔥 Gravité encore un peu plus faible = saut plus long
+  player.gravity = player.baseGravity + t * 0.32;
+
+  // 🔥 Jump légèrement plus fort = un tout petit peu plus haut
+  player.jumpForce = player.baseJump + 4 - t * 2;
 }
+
+
+
+
 
 let lastTime = 0;
 
@@ -294,14 +307,14 @@ function update(time = 0) {
     player.jumping = false;
   }
 
-  // CROUCH (ANIMATION LENTE + OFFSET)
+  // CROUCH
   player.crouching = keys.ArrowDown && !player.jumping;
 
   let sprite;
   const h = player.crouching ? 95 : player.h;
 
   if (player.crouching) {
-    player.crouchTimer += dt * 0.6; // 🔥 plus lent
+    player.crouchTimer += dt * 0.6;
 
     if (player.crouchTimer > player.crouchSpeed) {
       player.crouchFrame = (player.crouchFrame + 1) % 2;
@@ -313,7 +326,7 @@ function update(time = 0) {
       player.drawOffsetX = 0;
     } else {
       sprite = assets.crouch2;
-      player.drawOffsetX = 6; // 👉 décalage droite
+      player.drawOffsetX = 6;
     }
 
   } else {
@@ -370,14 +383,14 @@ function update(time = 0) {
 async function init() {
   const [stand, crouch, crouch2, rock1, rock2, airplane, background, clouds] =
     await Promise.all([
-      loadImage("persos/debout.png"),
-      loadImage("persos/par_terre.png"),
-      loadImage("persos/par_terre2.png"),
-      loadImage("persos/caillou.png"),
-      loadImage("persos/caillou2.png"),
-      loadImage("persos/avion.png"),
-      loadImage("persos/fond.png"),
-      loadImage("persos/ciel_nuages.png")
+      loadImage("assets/persos/debout.png"),
+      loadImage("assets/persos/par_terre.png"),
+      loadImage("assets/persos/par_terre2.png"),
+      loadImage("assets/persos/caillou.png"),
+      loadImage("assets/persos/caillou2.png"),
+      loadImage("assets/persos/avion.png"),
+      loadImage("assets/persos/fond.png"),
+      loadImage("assets/persos/ciel_nuages.png")
     ]);
 
   Object.assign(assets, {
