@@ -1,0 +1,43 @@
+body {
+  background-image: url("assets/Soundbox/background/fond.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+.menu-btn {
+	position: fixed;
+	
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+
+    background: rgba(255,255,255,0.9);
+    color: #111;
+    transition: 0.3s;
+}
+
+.menu-btn:hover {
+    transform: scale(1.05);
+    background: white;
+}
+
+#soundBox {
+  width: 300px;
+  height: 300px;
+  background-image: url("assets/Soundbox/image_son/image1.jpg");
+  background-size: cover;
+  background-position: center;
+  border-radius: 20px;
+  cursor: pointer;
+  margin: 100px auto;
+  transition: transform 0.15s ease;
+}
+
+#soundBox:active {
+  transform: scale(0.95);
+}
