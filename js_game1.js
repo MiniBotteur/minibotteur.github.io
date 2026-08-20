@@ -22,7 +22,8 @@ const WORLD_SIZE = 3000;
 const FOOD_COUNT = 1200;
 const MIN_CELL_MASS = 20;
 const EJECT_MASS = 12;
-const MERGE_DELAY = 9000;
+const MERGE_BASE_DELAY = 5000;
+const MERGE_MASS_FACTOR = 35;
 const SPLIT_IMPULSE = 900;
 
 // =====================
@@ -49,6 +50,8 @@ let cells = [{
 let mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let lastSplit = 0;
 let lastFeed = 0;
+let lastFrame = performance.now();
+let camera = { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 };
 
 // =====================
 // WORLD
@@ -89,11 +92,14 @@ function getZoom() {
 }
 
 function getCamera() {
-    const totalMass = cells.reduce((sum, cell) => sum + cell.mass, 0);
-    return {
-        x: cells.reduce((sum, cell) => sum + cell.x * cell.mass, 0) / totalMass,
-        y: cells.reduce((sum, cell) => sum + cell.y * cell.mass, 0) / totalMass
+    const target = {
+        x: cells.reduce((sum, cell) => sum + cell.x, 0) / cells.length,
+        y: cells.reduce((sum, cell) => sum + cell.y, 0) / cells.length
     };
+    const follow = 0.12;
+    camera.x += (target.x - camera.x) * follow;
+    camera.y += (target.y - camera.y) * follow;
+    return camera;
 }
 
 function totalMass() {
@@ -114,7 +120,7 @@ function spawnFood() {
             x: Math.random() * WORLD_SIZE,
             y: Math.random() * WORLD_SIZE,
             radius: 7,
-            color: `hsl(${Math.random() * 360},90%,60%)`
+            color: `hsl(${Math.random() * 360},90%,65%)`
         });
     }
 }
@@ -208,8 +214,12 @@ function splitCells() {
         const splitMass = cell.mass / 2;
         const splitRadius = massToRadius(splitMass);
         const separation = cell.radius + splitRadius + 12;
+        const splitAt = Date.now();
         cell.mass = splitMass;
         updateCellRadius(cell);
+        const mergeAt = splitAt + MERGE_BASE_DELAY + splitMass * MERGE_MASS_FACTOR;
+        cell.splitAt = splitAt;
+        cell.mergeAt = mergeAt;
         nextCells.push({
             x: clamp(cell.x + Math.cos(angle) * separation, splitRadius, WORLD_SIZE - splitRadius),
             y: clamp(cell.y + Math.sin(angle) * separation, splitRadius, WORLD_SIZE - splitRadius),
@@ -217,8 +227,11 @@ function splitCells() {
             radius: splitRadius,
             vx: Math.cos(angle) * SPLIT_IMPULSE,
             vy: Math.sin(angle) * SPLIT_IMPULSE,
-            born: Date.now(),
-            color: cell.color
+            born: splitAt,
+            splitAt,
+            mergeAt,
+            color: cell.color,
+            splitBoost: SPLIT_IMPULSE
         });
     });
     cells.push(...nextCells);
@@ -230,8 +243,8 @@ function mergeCells() {
         for (let j = i - 1; j >= 0; j--) {
             const a = cells[i];
             const b = cells[j];
-            if (Date.now() - a.born < MERGE_DELAY || Date.now() - b.born < MERGE_DELAY) continue;
-            if (dist(a, b) < Math.max(a.radius, b.radius) * 0.65) {
+            if (Date.now() < (a.mergeAt || 0) || Date.now() < (b.mergeAt || 0)) continue;
+            if (dist(a, b) < Math.max(a.radius, b.radius) * 0.95) {
                 b.mass += a.mass;
                 updateCellRadius(b);
                 cells.splice(i, 1);
@@ -241,59 +254,118 @@ function mergeCells() {
     }
 }
 
+function keepCellsSeparated() {
+    const now = Date.now();
+    for (let firstIndex = 0; firstIndex < cells.length; firstIndex++) {
+        for (let secondIndex = firstIndex + 1; secondIndex < cells.length; secondIndex++) {
+            const first = cells[firstIndex];
+            const second = cells[secondIndex];
+            if (now >= (first.mergeAt || 0) && now >= (second.mergeAt || 0)) continue;
+
+            let dx = second.x - first.x;
+            let dy = second.y - first.y;
+            let currentDistance = Math.hypot(dx, dy);
+            const minimumDistance = first.radius + second.radius + 2;
+            if (currentDistance >= minimumDistance) continue;
+
+            if (currentDistance < 0.001) {
+                dx = 1;
+                dy = 0;
+                currentDistance = 1;
+            }
+
+            const separation = (minimumDistance - currentDistance) / 2;
+            const normalX = dx / currentDistance;
+            const normalY = dy / currentDistance;
+            first.x -= normalX * separation;
+            first.y -= normalY * separation;
+            second.x += normalX * separation;
+            second.y += normalY * separation;
+            first.x = clamp(first.x, first.radius, WORLD_SIZE - first.radius);
+            first.y = clamp(first.y, first.radius, WORLD_SIZE - first.radius);
+            second.x = clamp(second.x, second.radius, WORLD_SIZE - second.radius);
+            second.y = clamp(second.y, second.radius, WORLD_SIZE - second.radius);
+        }
+    }
+}
+
 // =====================
 // PLAYER MOVE
 // =====================
-function updatePlayer() {
+function updatePlayer(delta) {
+    const groupCenter = {
+        x: cells.reduce((sum, cell) => sum + cell.x, 0) / cells.length,
+        y: cells.reduce((sum, cell) => sum + cell.y, 0) / cells.length
+    };
     cells.forEach(cell => {
         const dx = mouse.x - canvas.viewWidth / 2;
         const dy = mouse.y - canvas.viewHeight / 2;
         const d = Math.hypot(dx, dy);
-        const speed = clamp(430 / cell.radius, 45, 220);
+        const speed = clamp(720 / cell.radius, 55, 300);
         if (d > 8) {
-            cell.vx += (dx / d) * speed * 0.08;
-            cell.vy += (dy / d) * speed * 0.08;
+            cell.vx += (dx / d) * speed * delta * 7;
+            cell.vy += (dy / d) * speed * delta * 7;
         }
-        cell.vx *= 0.93;
-        cell.vy *= 0.93;
-        cell.x = clamp(cell.x + cell.vx / 60, cell.radius, WORLD_SIZE - cell.radius);
-        cell.y = clamp(cell.y + cell.vy / 60, cell.radius, WORLD_SIZE - cell.radius);
+        const damping = Math.pow(0.0007, delta);
+        cell.vx *= damping;
+        cell.vy *= damping;
+        if (cell.splitBoost) {
+            cell.splitBoost *= Math.pow(0.002, delta);
+            if (cell.splitBoost < 2) cell.splitBoost = 0;
+        }
+        if (cells.length > 1 && cell.splitAt) {
+            const regroupProgress = clamp((Date.now() - cell.splitAt) / 5000, 0, 1);
+            const groupAngle = Math.atan2(groupCenter.y - cell.y, groupCenter.x - cell.x);
+            const groupDistance = dist(cell, groupCenter);
+            if (groupDistance > cell.radius) {
+                const mergeReady = Date.now() >= (cell.mergeAt || 0);
+                const readyBoost = mergeReady ? 3.5 : 1;
+                const regroupForce = clamp(groupDistance * (1.2 + regroupProgress * 2) * readyBoost, 80, 1400);
+                cell.vx += Math.cos(groupAngle) * regroupForce * delta;
+                cell.vy += Math.sin(groupAngle) * regroupForce * delta;
+            }
+        }
+        cell.x = clamp(cell.x + cell.vx * delta, cell.radius, WORLD_SIZE - cell.radius);
+        cell.y = clamp(cell.y + cell.vy * delta, cell.radius, WORLD_SIZE - cell.radius);
     });
+    keepCellsSeparated();
     mergeCells();
 }
 
 function shootMass() {
     if (Date.now() - lastFeed < 140 || totalMass() < 80) return;
     const angle = Math.atan2(mouse.y - canvas.viewHeight / 2, mouse.x - canvas.viewWidth / 2);
-    const cell = cells.reduce((largest, candidate) => candidate.mass > largest.mass ? candidate : largest, cells[0]);
-    if (cell.mass < 50) return;
-    cell.mass -= EJECT_MASS;
-    updateCellRadius(cell);
-    pellets.push({
-        x: cell.x + Math.cos(angle) * (cell.radius + 14),
-        y: cell.y + Math.sin(angle) * (cell.radius + 14),
-        vx: Math.cos(angle) * 900,
-        vy: Math.sin(angle) * 900,
-        radius: 10,
-        mass: EJECT_MASS,
-        color: "#72e06a",
-        life: Date.now(),
-        source: cell
+    const eligibleCells = cells.filter(cell => cell.mass >= 50);
+    eligibleCells.forEach(cell => {
+        cell.mass -= EJECT_MASS;
+        updateCellRadius(cell);
+        pellets.push({
+            x: cell.x + Math.cos(angle) * (cell.radius + 14),
+            y: cell.y + Math.sin(angle) * (cell.radius + 14),
+            vx: Math.cos(angle) * 900,
+            vy: Math.sin(angle) * 900,
+            radius: 10,
+            mass: EJECT_MASS,
+            color: "#72e06a",
+            life: Date.now(),
+            source: cell
+        });
     });
+    if (!eligibleCells.length) return;
     lastFeed = Date.now();
 }
 
 // =====================
 // PELLETS
 // =====================
-function updatePellets() {
+function updatePellets(delta) {
     for (let i = pellets.length - 1; i >= 0; i--) {
         let p = pellets[i];
 
-        p.x += p.vx / 60;
-        p.y += p.vy / 60;
-        p.vx *= 0.96;
-        p.vy *= 0.96;
+        p.x += p.vx * delta;
+        p.y += p.vy * delta;
+        p.vx *= Math.pow(0.01, delta);
+        p.vy *= Math.pow(0.01, delta);
 
         const cell = cells.find(candidate =>
             Date.now() - p.life > 700 &&
@@ -333,14 +405,14 @@ function draw(o, color, cam, zoom) {
 }
 
 function drawBackground(camera, zoom) {
-    ctx.fillStyle = "#101923";
+    ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.viewWidth, canvas.viewHeight);
 
     const gridSize = Math.max(36, 90 * zoom);
     const offsetX = ((-camera.x * zoom) + canvas.viewWidth / 2) % gridSize;
     const offsetY = ((-camera.y * zoom) + canvas.viewHeight / 2) % gridSize;
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(150, 190, 210, 0.09)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
     ctx.lineWidth = 1;
     for (let x = offsetX; x < canvas.viewWidth; x += gridSize) {
         ctx.moveTo(x, 0);
@@ -381,20 +453,20 @@ function drawMiniMap() {
     const x = canvas.viewWidth - size - 20;
     const y = 20;
 
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillStyle = "rgba(0,0,0,0.78)";
     ctx.fillRect(x, y, size, size);
 
-    ctx.strokeStyle = "white";
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 1;
     ctx.strokeRect(x, y, size, size);
 
-    ctx.fillStyle = "white";
     ctx.beginPath();
     cells.forEach(cell => {
+        ctx.fillStyle = cell.color;
         ctx.beginPath();
-        ctx.arc(x + (cell.x / WORLD_SIZE) * size, y + (cell.y / WORLD_SIZE) * size, 3, 0, Math.PI * 2);
+        ctx.arc(x + (cell.x / WORLD_SIZE) * size, y + (cell.y / WORLD_SIZE) * size, 4, 0, Math.PI * 2);
         ctx.fill();
     });
-    ctx.fill();
 }
 
 // =====================
@@ -417,9 +489,11 @@ function drawUI() {
 // =====================
 // LOOP
 // =====================
-function loop() {
-    updatePlayer();
-    updatePellets();
+function loop(now) {
+    const delta = Math.min((now - lastFrame) / 1000, 0.05);
+    lastFrame = now;
+    updatePlayer(delta);
+    updatePellets(delta);
     checkFood();
 
     const zoom = getZoom();
@@ -439,4 +513,4 @@ function loop() {
 // START
 // =====================
 spawnFood();
-loop();
+requestAnimationFrame(loop);
