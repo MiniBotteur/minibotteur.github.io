@@ -19,11 +19,11 @@ window.addEventListener("resize", resizeCanvas);
 // CONFIG
 // =====================
 const WORLD_SIZE = 3000;
-const FOOD_COUNT = 600;
-const BOT_COUNT = 12;
+const FOOD_COUNT = 900;
 const MIN_CELL_MASS = 20;
 const EJECT_MASS = 12;
 const MERGE_DELAY = 9000;
+const SPLIT_IMPULSE = 900;
 
 // =====================
 // UTILS
@@ -53,7 +53,6 @@ let lastFeed = 0;
 // WORLD
 // =====================
 let foods = [];
-let bots = [];
 let pellets = [];
 
 // =====================
@@ -77,7 +76,7 @@ canvas.addEventListener("touchmove", (e) => {
 document.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "KeyW") e.preventDefault();
     if (e.code === "Space" && !e.repeat) splitCells();
-    if (e.code === "KeyW" && !e.repeat) shootMass();
+    if ((e.code === "KeyW" || e.key.toLowerCase() === "w") && !e.repeat) shootMass();
 });
 
 // =====================
@@ -117,44 +116,6 @@ function spawnFood() {
             color: `hsl(${Math.random() * 360},90%,60%)`
         });
     }
-}
-
-// =====================
-// BOTS
-// =====================
-function spawnBots() {
-    bots = [];
-    for (let i = 0; i < BOT_COUNT; i++) {
-        let mass = 80;
-        bots.push({
-            x: Math.random() * WORLD_SIZE,
-            y: Math.random() * WORLD_SIZE,
-            mass,
-            radius: massToRadius(mass),
-            vx: Math.random() * 2 - 1,
-            vy: Math.random() * 2 - 1,
-            color: `hsl(${Math.random() * 360},70%,55%)`
-        });
-    }
-}
-
-// =====================
-// PLAYER MOVE
-// =====================
-function updatePlayer() {
-    let dx = mouse.x - canvas.width / 2;
-    let dy = mouse.y - canvas.height / 2;
-    let d = Math.hypot(dx, dy);
-
-    let speed = clamp(6 / Math.sqrt(player.mass), 0.8, 4);
-
-    if (d > 1) {
-        player.x += (dx / d) * speed;
-        player.y += (dy / d) * speed;
-    }
-
-    player.x = clamp(player.x, player.radius, WORLD_SIZE - player.radius);
-    player.y = clamp(player.y, player.radius, WORLD_SIZE - player.radius);
 }
 
 // =====================
@@ -243,15 +204,17 @@ function splitCells() {
     cells.forEach(cell => {
         if (cell.mass < MIN_CELL_MASS * 2) return;
         const splitMass = cell.mass / 2;
+        const splitRadius = massToRadius(splitMass);
+        const separation = cell.radius + splitRadius + 12;
         cell.mass = splitMass;
         updateCellRadius(cell);
         nextCells.push({
-            x: clamp(cell.x + Math.cos(angle) * cell.radius, cell.radius, WORLD_SIZE - cell.radius),
-            y: clamp(cell.y + Math.sin(angle) * cell.radius, cell.radius, WORLD_SIZE - cell.radius),
+            x: clamp(cell.x + Math.cos(angle) * separation, splitRadius, WORLD_SIZE - splitRadius),
+            y: clamp(cell.y + Math.sin(angle) * separation, splitRadius, WORLD_SIZE - splitRadius),
             mass: splitMass,
-            radius: massToRadius(splitMass),
-            vx: Math.cos(angle) * 16,
-            vy: Math.sin(angle) * 16,
+            radius: splitRadius,
+            vx: Math.cos(angle) * SPLIT_IMPULSE,
+            vy: Math.sin(angle) * SPLIT_IMPULSE,
             born: Date.now()
         });
     });
@@ -288,8 +251,8 @@ function updatePlayer() {
             cell.vx += (dx / d) * speed * 0.08;
             cell.vy += (dy / d) * speed * 0.08;
         }
-        cell.vx *= 0.88;
-        cell.vy *= 0.88;
+        cell.vx *= 0.93;
+        cell.vy *= 0.93;
         cell.x = clamp(cell.x + cell.vx / 60, cell.radius, WORLD_SIZE - cell.radius);
         cell.y = clamp(cell.y + cell.vy / 60, cell.radius, WORLD_SIZE - cell.radius);
     });
@@ -299,20 +262,20 @@ function updatePlayer() {
 function shootMass() {
     if (Date.now() - lastFeed < 140 || totalMass() < 80) return;
     const angle = Math.atan2(mouse.y - canvas.viewHeight / 2, mouse.x - canvas.viewWidth / 2);
-    cells.forEach(cell => {
-        if (cell.mass < 50) return;
-        cell.mass -= EJECT_MASS;
-        updateCellRadius(cell);
-        pellets.push({
-            x: cell.x + Math.cos(angle) * cell.radius,
-            y: cell.y + Math.sin(angle) * cell.radius,
-            vx: Math.cos(angle) * 420,
-            vy: Math.sin(angle) * 420,
-            radius: 7,
-            mass: EJECT_MASS,
-            color: "#f4d35e",
-            life: Date.now()
-        });
+    const cell = cells.reduce((largest, candidate) => candidate.mass > largest.mass ? candidate : largest, cells[0]);
+    if (cell.mass < 50) return;
+    cell.mass -= EJECT_MASS;
+    updateCellRadius(cell);
+    pellets.push({
+        x: cell.x + Math.cos(angle) * (cell.radius + 14),
+        y: cell.y + Math.sin(angle) * (cell.radius + 14),
+        vx: Math.cos(angle) * 900,
+        vy: Math.sin(angle) * 900,
+        radius: 10,
+        mass: EJECT_MASS,
+        color: "#72e06a",
+        life: Date.now(),
+        source: cell
     });
     lastFeed = Date.now();
 }
@@ -329,7 +292,11 @@ function updatePellets() {
         p.vx *= 0.96;
         p.vy *= 0.96;
 
-        const cell = cells.find(candidate => Date.now() - p.life > 700 && dist(candidate, p) < candidate.radius);
+        const cell = cells.find(candidate =>
+            Date.now() - p.life > 700 &&
+            (candidate !== p.source || Date.now() - p.life > 1400) &&
+            dist(candidate, p) < candidate.radius
+        );
         if (cell) {
             cell.mass += p.mass;
             updateCellRadius(cell);
@@ -400,7 +367,7 @@ function drawUI() {
 
     ctx.fillStyle = "white";
     ctx.font = "18px Arial";
-    ctx.fillText("Masse: " + Math.floor(totalMass()) + "  |  Espace: split  W: feed", x + 12, y + 32);
+    ctx.fillText("Masse : " + Math.floor(totalMass()), x + 20, y + 32);
 }
 
 // =====================
@@ -414,12 +381,10 @@ function loop() {
     let cam = getCamera();
 
     foods.forEach(f => draw(f, f.color, cam, zoom));
-    bots.forEach(b => draw(b, b.color, cam, zoom));
     pellets.forEach(p => draw(p, p.color, cam, zoom));
     cells.forEach(cell => draw(cell, "#f7f7f2", cam, zoom));
 
     updatePlayer();
-    updateBots();
     updatePellets();
     checkFood();
 
@@ -433,5 +398,4 @@ function loop() {
 // START
 // =====================
 spawnFood();
-spawnBots();
 loop();

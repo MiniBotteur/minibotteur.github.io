@@ -39,7 +39,7 @@ canvas {
     height: 100vh;
     display: block;
     touch-action: none;
-    cursor: crosshair;
+    cursor: default;
 }
 
 /* Bouton retour au-dessus */
