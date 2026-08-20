@@ -19,7 +19,7 @@ window.addEventListener("resize", resizeCanvas);
 // CONFIG
 // =====================
 const WORLD_SIZE = 3000;
-const FOOD_COUNT = 900;
+const FOOD_COUNT = 1200;
 const MIN_CELL_MASS = 20;
 const EJECT_MASS = 12;
 const MERGE_DELAY = 9000;
@@ -42,7 +42,8 @@ let cells = [{
     radius: massToRadius(160),
     vx: 0,
     vy: 0,
-    born: 0
+    born: 0,
+    color: "#54c7f3"
 }];
 
 let mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -193,7 +194,8 @@ function resetPlayer() {
         radius: massToRadius(160),
         vx: 0,
         vy: 0,
-        born: Date.now()
+        born: Date.now(),
+        color: "#54c7f3"
     }];
 }
 
@@ -215,7 +217,8 @@ function splitCells() {
             radius: splitRadius,
             vx: Math.cos(angle) * SPLIT_IMPULSE,
             vy: Math.sin(angle) * SPLIT_IMPULSE,
-            born: Date.now()
+            born: Date.now(),
+            color: cell.color
         });
     });
     cells.push(...nextCells);
@@ -329,6 +332,47 @@ function draw(o, color, cam, zoom) {
     ctx.fill();
 }
 
+function drawBackground(camera, zoom) {
+    ctx.fillStyle = "#101923";
+    ctx.fillRect(0, 0, canvas.viewWidth, canvas.viewHeight);
+
+    const gridSize = Math.max(36, 90 * zoom);
+    const offsetX = ((-camera.x * zoom) + canvas.viewWidth / 2) % gridSize;
+    const offsetY = ((-camera.y * zoom) + canvas.viewHeight / 2) % gridSize;
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(150, 190, 210, 0.09)";
+    ctx.lineWidth = 1;
+    for (let x = offsetX; x < canvas.viewWidth; x += gridSize) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.viewHeight);
+    }
+    for (let y = offsetY; y < canvas.viewHeight; y += gridSize) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.viewWidth, y);
+    }
+    ctx.stroke();
+}
+
+function drawCell(cell, camera, zoom) {
+    const screenX = canvas.viewWidth / 2 + (cell.x - camera.x) * zoom;
+    const screenY = canvas.viewHeight / 2 + (cell.y - camera.y) * zoom;
+    const radius = cell.radius * zoom;
+
+    ctx.beginPath();
+    ctx.fillStyle = cell.color;
+    ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.lineWidth = Math.max(1.5, radius * 0.045);
+    ctx.arc(screenX, screenY, radius - ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+    ctx.arc(screenX - radius * 0.3, screenY - radius * 0.3, radius * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+}
+
 // =====================
 // MINI MAP
 // =====================
@@ -374,19 +418,16 @@ function drawUI() {
 // LOOP
 // =====================
 function loop() {
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    let zoom = getZoom();
-    let cam = getCamera();
-
-    foods.forEach(f => draw(f, f.color, cam, zoom));
-    pellets.forEach(p => draw(p, p.color, cam, zoom));
-    cells.forEach(cell => draw(cell, "#f7f7f2", cam, zoom));
-
     updatePlayer();
     updatePellets();
     checkFood();
+
+    const zoom = getZoom();
+    const cam = getCamera();
+    drawBackground(cam, zoom);
+    foods.forEach(f => draw(f, f.color, cam, zoom));
+    pellets.forEach(p => draw(p, p.color, cam, zoom));
+    cells.forEach(cell => drawCell(cell, cam, zoom));
 
     drawMiniMap();
     drawUI();
